@@ -55,53 +55,88 @@ public class TenantServiceImpl implements ITenantService {
             throw new BizException("租户代码已存在");
         }
         
-        // 2. 生成租户 ID 和 Schema 名称
-        String tenantId = IdUtil.simpleUUID();
-        String schemaName = "tenant_" + tenantId.replace("-", "_");
+        // 2. 生成 Schema 名称（使用 tenantCode）
+        String schemaName = "tenant_" + registerDTO.getTenantCode();
         
-        // 3. 创建管理员用户 ID
-        String adminUserId = IdUtil.simpleUUID();
+        // 3. 插入租户记录（使用 JDBC 直接插入，让数据库生成 UUID）
+        String insertTenantSql = "INSERT INTO public.tenant_registry " +
+            "(tenant_code, tenant_name, schema_name, status, max_users, max_activities, storage_quota_mb) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING tenant_id";
         
-        // 4. 插入租户记录
-        Tenant tenant = new Tenant();
-        tenant.setTenantId(tenantId);
-        tenant.setTenantCode(registerDTO.getTenantCode());
-        tenant.setTenantName(registerDTO.getTenantName());
-        tenant.setSchemaName(schemaName);
-        tenant.setAdminUserId(adminUserId);
-        tenant.setStatus("ACTIVE");
-        tenant.setMaxUsers(10);
-        tenant.setMaxActivities(100);
-        tenant.setStorageQuotaMb(1024);
-        tenant.setCreatedAt(LocalDateTime.now());
-        tenant.setUpdatedAt(LocalDateTime.now());
-        
-        tenantMapper.insert(tenant);
+        String tenantId = jdbcTemplate.queryForObject(insertTenantSql, String.class,
+            registerDTO.getTenantCode(),
+            registerDTO.getTenantName(),
+            schemaName,
+            "ACTIVE",
+            10,
+            100,
+            1024
+        );
         
         log.info("租户创建成功: tenantId={}, tenantCode={}", tenantId, registerDTO.getTenantCode());
         
-        // 5. 创建租户 Schema
+        // 4. 创建租户 Schema
         createTenantSchema(tenantId, schemaName);
         
-        // 6. 在租户 Schema 中创建管理员用户
-        User admin = new User();
-        admin.setUserId(adminUserId);
-        admin.setUsername(registerDTO.getAdminUsername());
-        admin.setPasswordHash(bcryptUtil.encode(registerDTO.getAdminPassword()));
-        admin.setEmail(registerDTO.getAdminEmail());
-        admin.setPhone(registerDTO.getAdminPhone());
-        admin.setRealName(registerDTO.getAdminRealName());
-        admin.setRole("ADMIN");
-        admin.setStatus("ACTIVE");
-        admin.setCreatedAt(LocalDateTime.now());
-        admin.setUpdatedAt(LocalDateTime.now());
+        // 5. 在租户 Schema 中创建管理员用户
+        // 设置租户上下文，以便在正确的 schema 中插入用户
+        com.lottery.common.context.TenantContext.setTenantId(tenantId);
         
-        // 注意：这里需要在租户 Schema 中插入用户，需要设置租户上下文
-        userMapper.insert(admin);
+        String adminUserId = null;
+        try {
+            // 使用 JDBC 直接插入用户，让数据库生成 UUID
+            String insertUserSql = "INSERT INTO " + schemaName + ".users " +
+                "(username, password_hash, email, phone, real_name, role, status) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING user_id";
+            
+            adminUserId = jdbcTemplate.queryForObject(insertUserSql, String.class,
+                registerDTO.getAdminUsername(),
+                bcryptUtil.encode(registerDTO.getAdminPassword()),
+                registerDTO.getAdminEmail(),
+                registerDTO.getAdminPhone(),
+                registerDTO.getAdminRealName(),
+                "ADMIN",
+                "ACTIVE"
+            );
+            
+            log.info("管理员用户创建成功: userId={}, username={}", adminUserId, registerDTO.getAdminUsername());
+        } finally {
+            // 清除租户上下文
+            com.lottery.common.context.TenantContext.clear();
+        }
         
-        log.info("管理员用户创建成功: userId={}, username={}", adminUserId, registerDTO.getAdminUsername());
+        // 6. 更新租户表的 admin_user_id
+        if (adminUserId != null) {
+            String updateTenantSql = "UPDATE public.tenant_registry SET admin_user_id = ?::uuid WHERE tenant_id = ?::uuid";
+            jdbcTemplate.update(updateTenantSql, adminUserId, tenantId);
+        }
         
         // 7. 返回租户信息
+        String selectTenantSql = "SELECT tenant_id, tenant_code, tenant_name, schema_name, admin_user_id, " +
+            "status, subscription_plan, max_users, max_activities, storage_quota_mb, " +
+            "created_at, updated_at, expired_at " +
+            "FROM public.tenant_registry WHERE tenant_id = ?::uuid";
+        
+        Tenant tenant = jdbcTemplate.queryForObject(selectTenantSql, (rs, rowNum) -> {
+            Tenant t = new Tenant();
+            t.setTenantId(rs.getString("tenant_id"));
+            t.setTenantCode(rs.getString("tenant_code"));
+            t.setTenantName(rs.getString("tenant_name"));
+            t.setSchemaName(rs.getString("schema_name"));
+            t.setAdminUserId(rs.getString("admin_user_id"));
+            t.setStatus(rs.getString("status"));
+            t.setSubscriptionPlan(rs.getString("subscription_plan"));
+            t.setMaxUsers(rs.getInt("max_users"));
+            t.setMaxActivities(rs.getInt("max_activities"));
+            t.setStorageQuotaMb(rs.getInt("storage_quota_mb"));
+            t.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+            t.setUpdatedAt(rs.getTimestamp("updated_at").toLocalDateTime());
+            if (rs.getTimestamp("expired_at") != null) {
+                t.setExpiredAt(rs.getTimestamp("expired_at").toLocalDateTime());
+            }
+            return t;
+        }, tenantId);
+        
         return BeanUtil.copyProperties(tenant, TenantVO.class);
     }
     

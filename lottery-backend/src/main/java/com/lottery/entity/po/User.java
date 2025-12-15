@@ -1,6 +1,8 @@
 package com.lottery.entity.po;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -18,9 +20,10 @@ public class User implements Serializable {
     private static final long serialVersionUID = 1L;
     
     /**
-     * 用户 ID
+     * 用户 ID（数据库自动生成UUID）
      */
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.NONE)
+    @TableField(insertStrategy = FieldStrategy.NEVER)
     private String userId;
     
     /**

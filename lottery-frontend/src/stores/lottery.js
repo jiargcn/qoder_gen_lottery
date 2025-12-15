@@ -33,7 +33,14 @@ export const useLotteryStore = defineStore('lottery', () => {
       remainingParticipants.value = data.participants.filter(p => !p.isWinner)
     }
     if (data.winners) {
-      winners.value = data.winners
+      // 确保 winners 中存储的是名字字符串，而不是对象
+      const processedWinners = {}
+      for (const [prizeName, winnerList] of Object.entries(data.winners)) {
+        processedWinners[prizeName] = winnerList.map(winner => 
+          typeof winner === 'string' ? winner : winner.name
+        )
+      }
+      winners.value = processedWinners
     }
   }
   
@@ -43,15 +50,17 @@ export const useLotteryStore = defineStore('lottery', () => {
     isRolling.value = true
     rollingInterval = setInterval(() => {
       const randomIndex = Math.floor(Math.random() * remainingParticipants.value.length)
-      currentRollingName.value = remainingParticipants.value[randomIndex]
+      // 获取参与者对象的名字
+      currentRollingName.value = remainingParticipants.value[randomIndex].name
     }, 50)
   }
   
-  const stopRolling = async () => {
+  const stopRolling = () => {
     clearInterval(rollingInterval)
     isRolling.value = false
     
     const prize = prizes.value[currentPrizeIndex.value]
+    // 直接使用名字字符串
     const winnerName = currentRollingName.value
     
     if (!winners.value[prize.prizeName]) {
@@ -59,11 +68,12 @@ export const useLotteryStore = defineStore('lottery', () => {
     }
     winners.value[prize.prizeName].push(winnerName)
     
+    // 从剩余参与者中移除中奖者（比较名字）
     remainingParticipants.value = remainingParticipants.value.filter(
-      name => name !== winnerName
+      p => p.name !== winnerName
     )
     
-    // TODO: 调用后端API保存中奖记录
+    return winnerName
   }
   
   const saveWinner = ({ name }) => {
@@ -72,6 +82,18 @@ export const useLotteryStore = defineStore('lottery', () => {
     if (participant) {
       participant.isWinner = true
       participant.prizeName = currentPrize.value?.prizeName
+    }
+    
+    // 检查当前奖项是否已满，如果满了自动切换到下一个奖项
+    const currentPrizeName = currentPrize.value?.prizeName
+    const currentWinners = winners.value[currentPrizeName] || []
+    const totalQuota = currentPrize.value?.totalQuota || 0
+    
+    if (currentWinners.length >= totalQuota) {
+      // 当前奖项已满，自动切换到下一个奖项
+      if (currentPrizeIndex.value < prizes.value.length - 1) {
+        currentPrizeIndex.value++
+      }
     }
   }
   

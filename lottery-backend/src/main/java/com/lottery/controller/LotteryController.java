@@ -2,6 +2,8 @@ package com.lottery.controller;
 
 import com.lottery.common.response.Result;
 import com.lottery.entity.dto.WinnerSaveDTO;
+import com.lottery.entity.po.LotteryActivity;
+import com.lottery.entity.po.Prize;
 import com.lottery.entity.vo.LotteryDataVO;
 import com.lottery.entity.vo.WinnerVO;
 import com.lottery.service.ILotteryService;
@@ -66,6 +68,94 @@ public class LotteryController {
     // @PreAuthorize("hasRole('ADMIN')")  // 开发环境暂时禁用
     public Result<Void> resetLottery(@PathVariable String activityId) {
         lotteryService.resetLottery(activityId);
+        return Result.success();
+    }
+    
+    // ==================== 活动管理 ====================
+    
+    /**
+     * 获取活动列表
+     */
+    @Operation(summary = "获取活动列表", description = "获取当前租户的所有活动")
+    @GetMapping("/activities")
+    public Result<List<LotteryActivity>> getActivities() {
+        List<LotteryActivity> activities = lotteryService.getActivities();
+        return Result.success(activities);
+    }
+    
+    /**
+     * 获取活动详情
+     */
+    @Operation(summary = "获取活动详情", description = "根据ID获取活动详细信息")
+    @GetMapping("/activities/{activityId}")
+    public Result<LotteryActivity> getActivity(@PathVariable String activityId) {
+        LotteryActivity activity = lotteryService.getActivity(activityId);
+        return Result.success(activity);
+    }
+    
+    /**
+     * 创建活动
+     */
+    @Operation(summary = "创建活动", description = "创建新的抽奖活动")
+    @PostMapping("/activities")
+    public Result<LotteryActivity> createActivity(@RequestBody LotteryActivity activity) {
+        LotteryActivity created = lotteryService.createActivity(activity);
+        return Result.success(created);
+    }
+    
+    /**
+     * 更新活动
+     */
+    @Operation(summary = "更新活动", description = "更新活动信息")
+    @PutMapping("/activities/{activityId}")
+    public Result<LotteryActivity> updateActivity(@PathVariable String activityId, 
+                                                   @RequestBody LotteryActivity activity) {
+        activity.setActivityId(activityId);
+        LotteryActivity updated = lotteryService.updateActivity(activity);
+        return Result.success(updated);
+    }
+    
+    // ==================== 奖项管理 ====================
+    
+    /**
+     * 获取活动的奖项列表
+     */
+    @Operation(summary = "获取奖项列表", description = "获取指定活动的所有奖项")
+    @GetMapping("/activities/{activityId}/prizes")
+    public Result<List<Prize>> getPrizes(@PathVariable String activityId) {
+        List<Prize> prizes = lotteryService.getPrizes(activityId);
+        return Result.success(prizes);
+    }
+    
+    /**
+     * 创建奖项
+     */
+    @Operation(summary = "创建奖项", description = "为活动添加奖项")
+    @PostMapping("/prizes")
+    public Result<Prize> createPrize(@RequestBody Prize prize) {
+        Prize created = lotteryService.createPrize(prize);
+        return Result.success(created);
+    }
+    
+    /**
+     * 更新奖项
+     */
+    @Operation(summary = "更新奖项", description = "更新奖项信息")
+    @PutMapping("/prizes/{prizeId}")
+    public Result<Prize> updatePrize(@PathVariable String prizeId, 
+                                     @RequestBody Prize prize) {
+        prize.setPrizeId(prizeId);
+        Prize updated = lotteryService.updatePrize(prize);
+        return Result.success(updated);
+    }
+    
+    /**
+     * 删除奖项
+     */
+    @Operation(summary = "删除奖项", description = "删除指定奖项（不能删除已抽取的奖项）")
+    @DeleteMapping("/prizes/{prizeId}")
+    public Result<Void> deletePrize(@PathVariable String prizeId) {
+        lotteryService.deletePrize(prizeId);
         return Result.success();
     }
 }

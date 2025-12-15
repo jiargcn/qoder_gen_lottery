@@ -33,7 +33,7 @@ logging:
     com.lottery: DEBUG
 lottery:
   jwt:
-    secret: lottery-secret-key-2024
+    secret: lottery-secret-key-2024-for-jwt-hmac-sha256-algorithm-minimum-256bits
     expiration: 7200
   tenant:
     schema-prefix: tenant_

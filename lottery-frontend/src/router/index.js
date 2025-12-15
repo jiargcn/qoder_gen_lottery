@@ -16,6 +16,16 @@ const routes = [
     component: () => import('@/views/Register.vue')
   },
   {
+    path: '/activities',
+    name: 'ActivityList',
+    component: () => import('@/views/ActivityList.vue')
+  },
+  {
+    path: '/activities/:id/prizes',
+    name: 'PrizeManage',
+    component: () => import('@/views/PrizeManage.vue')
+  },
+  {
     path: '/lottery/:id',
     name: 'LotteryDraw',
     component: () => import('@/views/LotteryDraw.vue')

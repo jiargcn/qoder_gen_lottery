@@ -4,10 +4,19 @@
       <h1>年会抽奖系统</h1>
       <el-form :model="form" class="login-form">
         <el-form-item>
-          <el-input v-model="form.username" placeholder="用户名" />
+          <el-input v-model="form.tenantCode" placeholder="租户代码">
+            <template #prepend>租户</template>
+          </el-input>
         </el-form-item>
         <el-form-item>
-          <el-input v-model="form.password" type="password" placeholder="密码" />
+          <el-input v-model="form.username" placeholder="用户名">
+            <template #prepend>用户名</template>
+          </el-input>
+        </el-form-item>
+        <el-form-item>
+          <el-input v-model="form.password" type="password" placeholder="密码">
+            <template #prepend>密码</template>
+          </el-input>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleLogin" style="width: 100%">
@@ -32,20 +41,30 @@ import request from '../utils/request'
 
 const router = useRouter()
 const form = reactive({
+  tenantCode: '',
   username: '',
   password: ''
 })
 
 const handleLogin = async () => {
+  if (!form.tenantCode || !form.username || !form.password) {
+    ElMessage.warning('请填写租户代码、用户名和密码')
+    return
+  }
+  
   try {
     const res = await request.post('/auth/login', form)
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('tenantId', res.data.tenantId)
-    localStorage.setItem('currentActivityId', 'demo') // 设置默认活动ID
+    localStorage.setItem('token', res.token)
+    localStorage.setItem('tenantId', res.tenantId || res.userInfo?.tenantId)
+    localStorage.setItem('tenantCode', form.tenantCode)
     ElMessage.success('登录成功')
-    router.push('/lottery/demo')
+    router.push('/activities') // 跳转到活动列表
   } catch (error) {
-    ElMessage.error('登录失败')
+    if (error.response?.data?.message) {
+      ElMessage.error(error.response.data.message)
+    } else {
+      ElMessage.error('登录失败，请检查租户代码、用户名和密码')
+    }
   }
 }
 
@@ -68,12 +87,19 @@ const goToRegister = () => {
   padding: 40px;
   border-radius: 15px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  width: 400px;
+  width: 450px;
 }
 
 .login-box h1 {
   text-align: center;
   color: #cc0000;
   margin-bottom: 30px;
+}
+
+.login-form :deep(.el-input-group__prepend) {
+  background-color: #f5f7fa;
+  color: #606266;
+  min-width: 80px;
+  justify-content: center;
 }
 </style>

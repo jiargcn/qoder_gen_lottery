@@ -56,7 +56,10 @@
           </div>
           <div v-else class="rolling-names">
             <div :class="['name-card', currentWinner ? 'winner-card' : '']">
-              {{ currentRollingName || currentWinner }}
+              <!-- 确保显示的是字符串 -->
+              {{ typeof (currentRollingName || currentWinner) === 'string' 
+                  ? (currentRollingName || currentWinner) 
+                  : (currentRollingName?.name || currentWinner?.name || '未知') }}
             </div>
           </div>
         </div>
@@ -99,7 +102,8 @@
                   :key="index"
                   class="winner-tag"
                 >
-                  {{ index + 1 }}. {{ name }}
+                  <!-- 确保显示的是字符串 -->
+                  {{ index + 1 }}. {{ typeof name === 'string' ? name : name?.name || '未知' }}
                 </div>
               </div>
             </template>
@@ -157,23 +161,57 @@ const loadData = async () => {
 // 开始/停止抽奖
 const toggleLottery = async () => {
   if (isRolling.value) {
-    // 停止抽奖
-    const winner = lotteryStore.stopRolling()
-    currentWinner.value = winner
+    // 停止抽奖，获取中奖者名字（字符串）
+    const winnerName = lotteryStore.stopRolling()
+    
+    console.log('=== 调试信息 ===')
+    console.log('1. winnerName 原始值:', winnerName)
+    console.log('2. winnerName 类型:', typeof winnerName)
+    console.log('3. currentRollingName.value:', currentRollingName.value)
+    console.log('4. currentRollingName.value 类型:', typeof currentRollingName.value)
+    
+    // 直接使用返回的名字
+    const actualWinnerName = winnerName
+    currentWinner.value = actualWinnerName
+    
+    console.log('5. actualWinnerName:', actualWinnerName)
+    console.log('6. allParticipants:', allParticipants.value)
+    
+    if (!actualWinnerName) {
+      ElMessage.error('中奖者姓名为空')
+      return
+    }
     
     // 保存中奖记录到后端
     try {
+      // 查找中奖者的完整信息
+      const winnerParticipant = allParticipants.value.find(p => p.name === actualWinnerName)
+      
+      if (!winnerParticipant) {
+        console.error('找不到中奖者:', actualWinnerName)
+        console.error('所有参与者:', allParticipants.value.map(p => p.name))
+        ElMessage.error('找不到中奖者信息')
+        return
+      }
+      
+      // 计算当前抽奖序号（当前奖项已中奖数量 + 1）
+      const currentWinners = winners.value[currentPrize.value.prizeName] || []
+      const drawSequence = currentWinners.length + 1
+      
       await request.post(`/lottery/winners`, {
+        activityId: activityId,
         prizeId: currentPrize.value.prizeId,
-        participantName: winner,
-        drawTime: new Date().toISOString()
+        participantId: winnerParticipant.participantId,
+        drawTime: new Date().toISOString(),
+        drawSequence: drawSequence
       })
       
-      lotteryStore.saveWinner({ name: winner })
+      lotteryStore.saveWinner({ name: actualWinnerName })
       createFireworks()
       
     } catch (error) {
-      ElMessage.error('保存中奖记录失败')
+      console.error('保存中奖记录失败:', error)
+      ElMessage.error(error.response?.data?.message || '保存中奖记录失败')
     }
   } else {
     // 开始抽奖
@@ -344,6 +382,12 @@ onMounted(() => {
     color: #ff0000;
     font-size: 1.3em;
     font-weight: bold;
+  }
+  
+  .prize-name {
+    font-size: 1.2em;
+    color: #ff6600;
+    margin-top: 10px;
   }
 }
 

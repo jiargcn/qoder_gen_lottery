@@ -15,6 +15,7 @@ import com.lottery.service.IAuthService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -44,8 +45,13 @@ public class AuthServiceImpl implements IAuthService {
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
     
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
     @Override
     public Map<String, Object> login(LoginDTO loginDTO) {
+        log.info("开始登录: username={}, tenantCode={}", loginDTO.getUsername(), loginDTO.getTenantCode());
+        
         // 1. 查询租户信息
         Tenant tenant = null;
         if (loginDTO.getTenantCode() != null && !loginDTO.getTenantCode().isEmpty()) {
@@ -54,72 +60,112 @@ public class AuthServiceImpl implements IAuthService {
             tenant = tenantMapper.selectOne(tenantQuery);
             
             if (tenant == null) {
+                log.warn("租户不存在: tenantCode={}", loginDTO.getTenantCode());
                 throw new BizException("租户不存在");
             }
             
             if (!"ACTIVE".equals(tenant.getStatus())) {
+                log.warn("租户已被暂停: tenantCode={}", loginDTO.getTenantCode());
                 throw new BizException("租户已被暂停");
             }
-        }
-        
-        // 2. 查询用户信息（需要先设置租户上下文）
-        LambdaQueryWrapper<User> userQuery = new LambdaQueryWrapper<>();
-        userQuery.eq(User::getUsername, loginDTO.getUsername());
-        User user = userMapper.selectOne(userQuery);
-        
-        if (user == null) {
-            throw new BizException("用户名或密码错误");
-        }
-        
-        // 3. 验证密码
-        if (!bcryptUtil.matches(loginDTO.getPassword(), user.getPasswordHash())) {
-            throw new BizException("用户名或密码错误");
-        }
-        
-        // 4. 检查用户状态
-        if (!"ACTIVE".equals(user.getStatus())) {
-            throw new BizException("用户已被禁用");
-        }
-        
-        // 5. 生成 Token
-        String token = jwtUtil.generateToken(
-            user.getUserId(), 
-            tenant != null ? tenant.getTenantId() : null, 
-            user.getUsername(), 
-            user.getRole()
-        );
-        
-        // 6. 保存会话信息到 Redis
-        if (redisTemplate != null) {
-            String sessionKey = "session:" + token;
-            Map<String, Object> sessionData = new HashMap<>();
-            sessionData.put("userId", user.getUserId());
-            sessionData.put("tenantId", tenant != null ? tenant.getTenantId() : null);
-            sessionData.put("username", user.getUsername());
-            sessionData.put("role", user.getRole());
             
-            redisTemplate.opsForValue().set(sessionKey, sessionData, 2, TimeUnit.HOURS);
+            log.info("租户查询成功: tenantId={}, schemaName={}", tenant.getTenantId(), tenant.getSchemaName());
+        } else {
+            log.warn("登录请求缺少租户代码");
+            throw new BizException("请输入租户代码");
         }
         
-        // 7. 更新最后登录时间
-        user.setLastLoginAt(LocalDateTime.now());
-        userMapper.updateById(user);
-        
-        // 8. 构造返回数据
-        Map<String, Object> result = new HashMap<>();
-        result.put("token", token);
-        
-        UserVO userVO = BeanUtil.copyProperties(user, UserVO.class);
-        result.put("userInfo", userVO);
-        
+        // 2. 设置租户上下文，以便查询用户时切换到正确的 schema
         if (tenant != null) {
-            result.put("tenantCode", tenant.getTenantCode());
-            result.put("tenantName", tenant.getTenantName());
+            com.lottery.common.context.TenantContext.setTenantId(tenant.getTenantId());
         }
         
-        log.info("用户登录成功: username={}, tenantCode={}", user.getUsername(), loginDTO.getTenantCode());
-        
-        return result;
+        try {
+            // 3. 查询用户信息（使用 JdbcTemplate 直接查询）
+            String schemaName = tenant.getSchemaName();
+            String selectUserSql = "SELECT user_id, username, password_hash, email, phone, real_name, role, status, " +
+                "last_login_at, created_at, updated_at, created_by " +
+                "FROM " + schemaName + ".users WHERE username = ?";
+            
+            User user = null;
+            try {
+                user = jdbcTemplate.queryForObject(selectUserSql, (rs, rowNum) -> {
+                    User u = new User();
+                    u.setUserId(rs.getString("user_id"));
+                    u.setUsername(rs.getString("username"));
+                    u.setPasswordHash(rs.getString("password_hash"));
+                    u.setEmail(rs.getString("email"));
+                    u.setPhone(rs.getString("phone"));
+                    u.setRealName(rs.getString("real_name"));
+                    u.setRole(rs.getString("role"));
+                    u.setStatus(rs.getString("status"));
+                    if (rs.getTimestamp("last_login_at") != null) {
+                        u.setLastLoginAt(rs.getTimestamp("last_login_at").toLocalDateTime());
+                    }
+                    u.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+                    u.setUpdatedAt(rs.getTimestamp("updated_at").toLocalDateTime());
+                    u.setCreatedBy(rs.getString("created_by"));
+                    return u;
+                }, loginDTO.getUsername());
+            } catch (Exception e) {
+                // 用户不存在
+                throw new BizException("用户名或密码错误");
+            }
+            
+            // 4. 验证密码
+            if (!bcryptUtil.matches(loginDTO.getPassword(), user.getPasswordHash())) {
+                throw new BizException("用户名或密码错误");
+            }
+            
+            // 5. 检查用户状态
+            if (!"ACTIVE".equals(user.getStatus())) {
+                throw new BizException("用户已被禁用");
+            }
+            
+            // 6. 生成 Token
+            String token = jwtUtil.generateToken(
+                user.getUserId(), 
+                tenant != null ? tenant.getTenantId() : null, 
+                user.getUsername(), 
+                user.getRole()
+            );
+            
+            // 7. 保存会话信息到 Redis
+            if (redisTemplate != null) {
+                String sessionKey = "session:" + token;
+                Map<String, Object> sessionData = new HashMap<>();
+                sessionData.put("userId", user.getUserId());
+                sessionData.put("tenantId", tenant != null ? tenant.getTenantId() : null);
+                sessionData.put("username", user.getUsername());
+                sessionData.put("role", user.getRole());
+                
+                redisTemplate.opsForValue().set(sessionKey, sessionData, 2, TimeUnit.HOURS);
+            }
+            
+            // 8. 更新最后登录时间
+            String updateUserSql = "UPDATE " + tenant.getSchemaName() + ".users " +
+                "SET last_login_at = ? WHERE user_id = ?::uuid";
+            jdbcTemplate.update(updateUserSql, LocalDateTime.now(), user.getUserId());
+            
+            // 9. 构造返回数据
+            Map<String, Object> result = new HashMap<>();
+            result.put("token", token);
+            
+            UserVO userVO = BeanUtil.copyProperties(user, UserVO.class);
+            result.put("userInfo", userVO);
+            
+            if (tenant != null) {
+                result.put("tenantCode", tenant.getTenantCode());
+                result.put("tenantName", tenant.getTenantName());
+            }
+            
+            log.info("用户登录成功: username={}, tenantCode={}", user.getUsername(), loginDTO.getTenantCode());
+            
+            return result;
+        } finally {
+            // 清除租户上下文
+            com.lottery.common.context.TenantContext.clear();
+        }
     }
     
     @Override

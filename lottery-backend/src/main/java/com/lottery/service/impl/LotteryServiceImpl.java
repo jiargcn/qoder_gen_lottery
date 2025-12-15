@@ -268,4 +268,142 @@ public class LotteryServiceImpl implements ILotteryService {
         
         log.info("抽奖重置成功: activityId={}", activityId);
     }
+    
+    // ==================== 活动管理 ====================
+    
+    @Override
+    public List<LotteryActivity> getActivities() {
+        // TODO: 根据当前租户ID查询，这里先查询全部
+        return activityMapper.selectList(null);
+    }
+    
+    @Override
+    public LotteryActivity getActivity(String activityId) {
+        LotteryActivity activity = activityMapper.selectById(activityId);
+        if (activity == null) {
+            throw new BizException("活动不存在");
+        }
+        return activity;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LotteryActivity createActivity(LotteryActivity activity) {
+        // 生成活动ID
+        activity.setActivityId(UUID.randomUUID().toString().replace("-", ""));
+        activity.setStatus("ACTIVE");
+        activity.setTotalParticipants(0);
+        activity.setTotalWinners(0);
+        activity.setCreatedAt(LocalDateTime.now());
+        activity.setUpdatedAt(LocalDateTime.now());
+        // TODO: 设置当前租户ID
+        activityMapper.insert(activity);
+        log.info("创建活动成功: activityId={}, activityName={}", 
+                activity.getActivityId(), activity.getActivityName());
+        return activity;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LotteryActivity updateActivity(LotteryActivity activity) {
+        LotteryActivity existing = activityMapper.selectById(activity.getActivityId());
+        if (existing == null) {
+            throw new BizException("活动不存在");
+        }
+        activity.setUpdatedAt(LocalDateTime.now());
+        activityMapper.updateById(activity);
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + activity.getActivityId());
+        }
+        
+        log.info("更新活动成功: activityId={}", activity.getActivityId());
+        return activity;
+    }
+    
+    // ==================== 奖项管理 ====================
+    
+    @Override
+    public List<Prize> getPrizes(String activityId) {
+        LambdaQueryWrapper<Prize> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Prize::getActivityId, activityId)
+               .orderByAsc(Prize::getDrawOrder);
+        return prizeMapper.selectList(wrapper);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Prize createPrize(Prize prize) {
+        // 生成奖项ID
+        prize.setPrizeId(UUID.randomUUID().toString().replace("-", ""));
+        prize.setDrawnCount(0);
+        prize.setStatus("PENDING");
+        
+        // 设置抽奖顺序（prizeLevel 就是 drawOrder）
+        if (prize.getDrawOrder() == null && prize.getPrizeLevel() != null) {
+            prize.setDrawOrder(prize.getPrizeLevel());
+        }
+        
+        prize.setCreatedAt(LocalDateTime.now());
+        prize.setUpdatedAt(LocalDateTime.now());
+        prizeMapper.insert(prize);
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + prize.getActivityId());
+        }
+        
+        log.info("创建奖项成功: prizeId={}, prizeName={}", 
+                prize.getPrizeId(), prize.getPrizeName());
+        return prize;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Prize updatePrize(Prize prize) {
+        Prize existing = prizeMapper.selectById(prize.getPrizeId());
+        if (existing == null) {
+            throw new BizException("奖项不存在");
+        }
+        
+        // 更新 drawOrder
+        if (prize.getPrizeLevel() != null) {
+            prize.setDrawOrder(prize.getPrizeLevel());
+        }
+        
+        prize.setUpdatedAt(LocalDateTime.now());
+        prizeMapper.updateById(prize);
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + existing.getActivityId());
+        }
+        
+        log.info("更新奖项成功: prizeId={}", prize.getPrizeId());
+        return prize;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deletePrize(String prizeId) {
+        Prize prize = prizeMapper.selectById(prizeId);
+        if (prize == null) {
+            throw new BizException("奖项不存在");
+        }
+        
+        // 检查是否已抽取
+        if (prize.getDrawnCount() > 0) {
+            throw new BizException("奖项已抽取，不能删除");
+        }
+        
+        prizeMapper.deleteById(prizeId);
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + prize.getActivityId());
+        }
+        
+        log.info("删除奖项成功: prizeId={}", prizeId);
+    }
 }
