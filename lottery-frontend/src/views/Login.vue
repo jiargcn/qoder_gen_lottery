@@ -14,6 +14,11 @@
             登录
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button @click="goToRegister" style="width: 100%">
+            注册账号
+          </el-button>
+        </el-form-item>
       </el-form>
     </div>
   </div>
@@ -36,11 +41,16 @@ const handleLogin = async () => {
     const res = await request.post('/auth/login', form)
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('tenantId', res.data.tenantId)
+    localStorage.setItem('currentActivityId', 'demo') // 设置默认活动ID
     ElMessage.success('登录成功')
     router.push('/lottery/demo')
   } catch (error) {
     ElMessage.error('登录失败')
   }
+}
+
+const goToRegister = () => {
+  router.push('/register')
 }
 </script>
 

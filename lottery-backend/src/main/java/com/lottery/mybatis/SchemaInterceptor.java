@@ -21,7 +21,7 @@ import java.sql.SQLException;
  * 核心功能：根据租户上下文动态切换数据库 Schema
  */
 @Slf4j
-@Component
+//@Component
 @Intercepts({
     @Signature(
         type = Executor.class,

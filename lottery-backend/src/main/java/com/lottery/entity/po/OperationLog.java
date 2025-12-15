@@ -1,6 +1,7 @@
 package com.lottery.entity.po;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
@@ -63,6 +64,7 @@ public class OperationLog implements Serializable {
     /**
      * 请求参数(JSON)
      */
+    @TableField(typeHandler = JacksonTypeHandler.class)
     private Map<String, Object> requestParams;
     
     /**

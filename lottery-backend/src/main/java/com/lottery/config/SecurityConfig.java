@@ -50,19 +50,8 @@ public class SecurityConfig {
             
             // 配置授权规则
             .authorizeHttpRequests(auth -> auth
-                // 公开接口
-                .requestMatchers(
-                    "/auth/login",
-                    "/auth/register",
-                    "/doc.html",
-                    "/swagger-ui/**",
-                    "/v3/api-docs/**",
-                    "/swagger-resources/**",
-                    "/webjars/**"
-                ).permitAll()
-                
-                // 其他接口需要认证
-                .anyRequest().authenticated()
+                // 开发环境：暂时允许所有请求（生产环境需要修改）
+                .anyRequest().permitAll()
             )
             
             // 添加 JWT 过滤器

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 export const useLotteryStore = defineStore('lottery', () => {
   const currentActivity = ref(null)
@@ -13,8 +13,28 @@ export const useLotteryStore = defineStore('lottery', () => {
   
   let rollingInterval = null
   
-  const loadLotteryData = async (activityId) => {
-    // TODO: 调用后端API加载数据
+  // 计算当前奖项
+  const currentPrize = computed(() => {
+    if (currentPrizeIndex.value >= prizes.value.length) {
+      return null
+    }
+    return prizes.value[currentPrizeIndex.value]
+  })
+  
+  const loadLotteryData = (data) => {
+    if (data.activity) {
+      currentActivity.value = data.activity
+    }
+    if (data.prizes) {
+      prizes.value = data.prizes
+    }
+    if (data.participants) {
+      allParticipants.value = data.participants
+      remainingParticipants.value = data.participants.filter(p => !p.isWinner)
+    }
+    if (data.winners) {
+      winners.value = data.winners
+    }
   }
   
   const startRolling = () => {
@@ -46,6 +66,29 @@ export const useLotteryStore = defineStore('lottery', () => {
     // TODO: 调用后端API保存中奖记录
   }
   
+  const saveWinner = ({ name }) => {
+    // 更新参会人员的中奖状态
+    const participant = allParticipants.value.find(p => p.name === name)
+    if (participant) {
+      participant.isWinner = true
+      participant.prizeName = currentPrize.value?.prizeName
+    }
+  }
+  
+  const resetLottery = () => {
+    currentPrizeIndex.value = 0
+    remainingParticipants.value = [...allParticipants.value]
+    winners.value = {}
+    isRolling.value = false
+    currentRollingName.value = ''
+    
+    // 重置所有参与者的中奖状态
+    allParticipants.value.forEach(p => {
+      p.isWinner = false
+      p.prizeName = null
+    })
+  }
+  
   return {
     currentActivity,
     prizes,
@@ -55,8 +98,11 @@ export const useLotteryStore = defineStore('lottery', () => {
     winners,
     isRolling,
     currentRollingName,
+    currentPrize,
     loadLotteryData,
     startRolling,
-    stopRolling
+    stopRolling,
+    saveWinner,
+    resetLottery
   }
 })

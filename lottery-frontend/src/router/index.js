@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   {
+    path: '/',
+    redirect: '/login'
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/Login.vue')
@@ -12,32 +16,9 @@ const routes = [
     component: () => import('@/views/Register.vue')
   },
   {
-    path: '/',
-    name: 'Dashboard',
-    component: () => import('@/views/Dashboard.vue'),
-    redirect: '/activities',
-    children: [
-      {
-        path: 'activities',
-        name: 'ActivityList',
-        component: () => import('@/views/ActivityList.vue')
-      },
-      {
-        path: 'activities/create',
-        name: 'ActivityCreate',
-        component: () => import('@/views/ActivityCreate.vue')
-      },
-      {
-        path: 'lottery/:id',
-        name: 'LotteryDraw',
-        component: () => import('@/views/LotteryDraw.vue')
-      },
-      {
-        path: 'history',
-        name: 'HistoryQuery',
-        component: () => import('@/views/HistoryQuery.vue')
-      }
-    ]
+    path: '/lottery/:id',
+    name: 'LotteryDraw',
+    component: () => import('@/views/LotteryDraw.vue')
   }
 ]
 
@@ -49,6 +30,7 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
+  // 如果没有token且访问的不是登录或注册页，则跳转到登录页
   if (!token && to.path !== '/login' && to.path !== '/register') {
     next('/login')
   } else {

@@ -114,6 +114,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLotteryStore } from '@/stores/lottery'
+import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
@@ -121,11 +122,12 @@ const route = useRoute()
 const router = useRouter()
 const lotteryStore = useLotteryStore()
 
-const activityId = route.params.id
+// 获取活动ID，优先从路由参数，其次从localStorage，最后使用默认值
+const activityId = route.params.id || localStorage.getItem('currentActivityId') || 'demo'
 const activityName = ref('')
 const currentWinner = ref('')
 
-// 从 store 中获取状态
+// 使用 storeToRefs 获取响应式状态
 const { 
   prizes, 
   currentPrizeIndex, 
@@ -135,7 +137,7 @@ const {
   isRolling,
   currentRollingName,
   currentPrize
-} = lotteryStore
+} = storeToRefs(lotteryStore)
 
 const canDraw = computed(() => {
   return currentPrize.value && remainingParticipants.value.length > 0
@@ -144,7 +146,7 @@ const canDraw = computed(() => {
 // 加载抽奖数据
 const loadData = async () => {
   try {
-    const data = await request.get(`/activities/${activityId}/lottery-data`)
+    const data = await request.get(`/lottery/activities/${activityId}/data`)
     lotteryStore.loadLotteryData(data)
     activityName.value = data.activity.activityName
   } catch (error) {
@@ -161,7 +163,7 @@ const toggleLottery = async () => {
     
     // 保存中奖记录到后端
     try {
-      await request.post(`/activities/${activityId}/winners`, {
+      await request.post(`/lottery/winners`, {
         prizeId: currentPrize.value.prizeId,
         participantName: winner,
         drawTime: new Date().toISOString()
@@ -189,7 +191,7 @@ const handleReset = async () => {
       type: 'warning'
     })
     
-    await request.post(`/activities/${activityId}/reset`)
+    await request.post(`/lottery/activities/${activityId}/reset`)
     lotteryStore.resetLottery()
     currentWinner.value = ''
     ElMessage.success('重置成功')
