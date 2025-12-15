@@ -1,195 +1,249 @@
-# 🎉 年会抽奖系统
+# 年会抽奖系统 - SaaS 版本
 
-一个功能完整、界面喜庆的单页面年会抽奖HTML应用，适用于公司年会、团建活动等场景。
+一个基于 Vue3 + Spring Boot + PostgreSQL + Redis 的多租户抽奖系统，支持租户独立数据隔离。
 
----
+## 项目概述
 
-## 📌 快速链接
+将原有单页面抽奖系统重构为前后端分离的多租户 SaaS 服务，保持核心抽奖功能和用户体验不变，增强数据持久化、多租户隔离、用户权限管理能力。
 
-- 📄 [查看抽奖页面](lottery.html) - 双击打开即可使用
-- 📖 [项目概述](./.qoder/repowiki/zh/content/项目概述.md) - 了解项目整体介绍
-- 🚀 [使用指南](./.qoder/repowiki/zh/content/使用指南.md) - 快速上手使用教程
-- 🎯 [核心功能](./.qoder/repowiki/zh/content/核心功能.md) - 详细功能说明
-- 🏗️ [技术架构](./.qoder/repowiki/zh/content/技术架构.md) - 技术实现架构
-- 📊 [数据结构](./.qoder/repowiki/zh/content/数据结构.md) - 数据模型设计
-- 🔧 [关键实现](./.qoder/repowiki/zh/content/关键实现.md) - 核心代码实现
+## 技术架构
 
----
+### 前端技术栈
+- Vue 3 + Vite
+- Element Plus
+- Pinia (状态管理)
+- Vue Router
+- Axios
 
-## ✨ 主要特性
+### 后端技术栈
+- Spring Boot 3.x
+- Spring Security + JWT
+- MyBatis-Plus
+- PostgreSQL 15+
+- Redis 7.x
 
-### 核心功能
-- 🎯 **单页面单文件** - 所有代码集成在一个HTML文件中，无需安装，开箱即用
-- 🏆 **自定义奖项** - 支持添加、删除、修改奖项名称、名额和奖品
-- 📁 **文件导入** - 支持导入Excel(.xlsx/.xls)和TXT文件作为参会人员名单
-- 👥 **100个示例姓名** - 默认包含100个中文示例姓名，可直接体验
-- 🎲 **公平抽奖** - 每人只能中奖一次，自动排除已中奖人员
-- 📊 **从低到高抽奖** - 按奖项顺序依次抽取（三等奖→二等奖→一等奖→特等奖）
-- 🎮 **一键控制** - 单个按钮控制开始/停止抽奖
-- 🔄 **全局重置** - 一键清空所有中奖记录，重新开始抽奖
-- 📋 **实时名单** - 显示所有参会人员及其中奖状态
+### 部署方案
+- Docker + Docker Compose
+- Nginx (前端静态资源 + 反向代理)
 
-### 界面特色
-- 🎨 **中国红配色** - 采用喜庆的红色、金色配色方案
-- ✨ **动态特效** - 飘落金币、烟花爆竹、滚动动画等
-- 📱 **响应式设计** - 自适应手机、平板、电脑屏幕
-- 🎭 **中奖高亮** - 中奖者金色高亮显示，震撼视觉效果
+## 项目结构
 
-## 🚀 快速开始
-
-### 使用方法
-
-1. **直接使用**
-   - 下载 `lottery.html` 文件
-   - 双击在浏览器中打开即可使用
-   - 页面已包含100个示例姓名，可直接体验
-
-2. **导入自己的人员名单**
-   - 点击"📁 导入文件"按钮
-   - 选择Excel或TXT文件
-   - 自动解析并加载参会人员
-
-3. **开始抽奖**
-   - 点击"🎯 开始抽奖"按钮，名字开始快速滚动
-   - 再次点击按钮停止，显示中奖者
-   - 继续点击抽取下一位
-   - 当前奖项抽完后自动进入下一个奖项
-
-4. **重新抽奖**
-   - 点击"🔄 全局重置"清空所有中奖记录
-   - 所有人员恢复为未中奖状态
-
-## 📋 文件格式说明
-
-### Excel文件格式
-- 支持 `.xlsx` 和 `.xls` 格式
-- 读取第一个工作表的第一列数据
-- 每行一个姓名
-- 示例：
-
-| 姓名 |
-|------|
-| 张三 |
-| 李四 |
-| 王五 |
-
-### TXT文件格式
-- 每行一个姓名
-- 支持UTF-8编码
-- 示例：
 ```
-张三
-李四
-王五
+qoder1/
+├── lottery-backend/          # 后端项目
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/lottery/
+│   │   │   │   ├── LotteryApplication.java
+│   │   │   │   ├── common/          # 公共模块
+│   │   │   │   ├── config/          # 配置类
+│   │   │   │   ├── interceptor/     # 拦截器
+│   │   │   │   ├── entity/          # 实体类
+│   │   │   │   ├── mapper/          # MyBatis Mapper
+│   │   │   │   ├── service/         # 业务逻辑
+│   │   │   │   └── controller/      # 控制器
+│   │   │   └── resources/
+│   │   │       ├── application.yml
+│   │   │       └── db/schema/       # 数据库脚本
+│   │   └── test/
+│   ├── pom.xml
+│   └── Dockerfile
+├── lottery-frontend/         # 前端项目
+│   ├── src/
+│   │   ├── main.js
+│   │   ├── App.vue
+│   │   ├── router/              # 路由配置
+│   │   ├── stores/              # Pinia 状态管理
+│   │   ├── views/               # 页面组件
+│   │   ├── components/          # 公共组件
+│   │   └── utils/               # 工具函数
+│   ├── package.json
+│   ├── vite.config.js
+│   └── Dockerfile
+├── docker-compose.yml
+└── README.md
 ```
 
-## 🎮 界面说明
+## 核心特性
 
-### 四栏布局
+### 多租户架构
+- 独立 Schema 方案，每个租户拥有独立数据库架构
+- 租户间数据完全隔离
+- 支持子域名识别：`tenant1.lottery.com`
 
-1. **左侧 - 参会人员名单**
-   - 显示所有参会人员
-   - 实时统计：总人数、已中奖、未中奖
-   - 中奖者金色高亮显示奖项名称
+### 权限管理
+- 三级权限：管理员(ADMIN)、操作员(OPERATOR)、查看者(VIEWER)
+- 基于角色的访问控制
+- JWT Token 认证
 
-2. **中左 - 设置面板**
-   - 奖项设置：名称、名额、奖品
-   - 文件导入：Excel/TXT文件
+### 抽奖功能
+- 保持原有纯前端滚动抽奖体验
+- 后端仅负责数据持久化
+- 支持多轮抽奖
+- 防止重复中奖
+- 实时保存中奖记录
 
-3. **中右 - 抽奖主区域**
-   - 当前奖项信息
-   - 滚动抽奖显示区
-   - 开始/停止按钮
-   - 全局重置按钮
+### 数据持久化
+- 所有业务数据保存到 PostgreSQL
+- 支持历史数据查询
+- Redis 缓存优化性能
 
-4. **右侧 - 中奖名单**
-   - 按奖项分组显示所有中奖者
-   - 显示奖品信息
-   - 实时更新
+## 快速开始
 
-## ⚙️ 默认配置
+### 前置要求
+- Docker & Docker Compose
+- JDK 17+
+- Node.js 20+
+- Maven 3.9+
 
-### 默认奖项设置
-- **三等奖**：10个名额，奖品：精美保温杯
-- **二等奖**：5个名额，奖品：蓝牙耳机
-- **一等奖**：3个名额，奖品：iPad
-- **特等奖**：1个名额，奖品：iPhone 15 Pro
+### 使用 Docker Compose 启动（推荐）
 
-*所有奖项配置均可自定义修改*
+```bash
+# 启动所有服务
+docker-compose up -d
 
-## 🎨 技术特性
+# 查看日志
+docker-compose logs -f
 
-- **纯前端实现** - HTML + CSS + JavaScript
-- **无需服务器** - 本地即可运行
-- **无需网络** - 离线也可使用（需提前加载Excel解析库）
-- **跨平台兼容** - 支持Windows、Mac、Linux
-- **现代浏览器支持** - Chrome、Firefox、Edge、Safari
+# 停止服务
+docker-compose down
+```
 
-## 🛠️ 自定义修改
+访问地址：
+- 前端：http://localhost
+- 后端API：http://localhost:8080
+- PostgreSQL：localhost:5432
+- Redis：localhost:6379
 
-### 修改奖项
-- 在"奖项设置"区域直接修改奖项名称、名额和奖品
-- 点击"➕ 添加奖项"增加新奖项
-- 点击"删除"按钮移除不需要的奖项
+### 本地开发
 
-### 修改样式
-- 打开HTML文件
-- 在 `<style>` 标签内修改CSS样式
-- 可修改颜色、字体、动画等
+#### 后端启动
 
-### 修改抽奖速度
-- 找到代码中的 `setInterval` 行
-- 修改 `50` 这个数值（单位：毫秒）
-- 数值越小滚动越快
+```bash
+cd lottery-backend
 
-## 📝 注意事项
+# 确保 PostgreSQL 和 Redis 已启动
+# 执行数据库初始化脚本
+psql -U lottery_user -d lottery_db -f src/main/resources/db/schema/init_public_schema.sql
 
-1. **浏览器要求**
-   - 建议使用Chrome、Edge等现代浏览器
-   - 需要支持ES6语法
+# 启动后端
+mvn spring-boot:run
+```
 
-2. **Excel文件导入**
-   - 需要网络连接以加载xlsx.js库（仅首次加载）
-   - 或者将xlsx.js库下载到本地引用
+#### 前端启动
 
-3. **数据安全**
-   - 所有数据仅在浏览器本地处理
-   - 不会上传到任何服务器
-   - 刷新页面会丢失当前抽奖记录
+```bash
+cd lottery-frontend
 
-## 🎯 使用场景
+# 安装依赖
+npm install
 
-- ✅ 公司年会抽奖
-- ✅ 团建活动抽奖
-- ✅ 会议抽奖
-- ✅ 培训抽奖
-- ✅ 其他需要随机抽取的场景
+# 启动开发服务器
+npm run dev
+```
 
-## 📄 开源协议
+访问 http://localhost:3000
 
-本项目采用 MIT 协议开源，可自由使用和修改。
+## 数据库初始化
 
-## 🤝 贡献
+### 1. 创建数据库和用户
 
-欢迎提出建议和改进意见！
+```sql
+CREATE DATABASE lottery_db;
+CREATE USER lottery_user WITH PASSWORD 'lottery_pass';
+GRANT ALL PRIVILEGES ON DATABASE lottery_db TO lottery_user;
+```
 
-## 💡 常见问题
+### 2. 初始化 public schema
 
-**Q: 如何确保抽奖的公平性？**
-A: 系统使用JavaScript的Math.random()函数进行随机抽取，每人只能中奖一次，已中奖人员会自动从候选池中移除。
+```bash
+psql -U lottery_user -d lottery_db -f lottery-backend/src/main/resources/db/schema/init_public_schema.sql
+```
 
-**Q: 可以同时抽多个人吗？**
-A: 当前版本每次只抽一个人，这样更有仪式感和悬念感。如需批量抽取，可以修改代码。
+### 3. 租户 Schema 自动创建
 
-**Q: 中奖记录可以导出吗？**
-A: 当前版本暂不支持导出，可以通过截图或手动记录的方式保存结果。
+租户注册时，系统会自动创建独立的 Schema 并初始化表结构。
 
-**Q: 刷新页面后数据会丢失吗？**
-A: 是的，当前版本不支持数据持久化。如需保留数据，建议不要刷新页面，或者添加localStorage功能。
+## API 文档
 
-**Q: 可以自定义更多奖项吗？**
-A: 可以，点击"➕ 添加奖项"即可添加任意数量的奖项。
+后端启动后访问 Swagger UI：
+http://localhost:8080/doc.html
 
----
+## 配置说明
 
-🎊 祝您的年会抽奖活动圆满成功！🎊
+### 后端配置 (application.yml)
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/lottery_db
+    username: lottery_user
+    password: lottery_pass
+  
+  redis:
+    host: localhost
+    port: 6379
+
+jwt:
+  secret: your-secret-key-change-this-in-production
+  expiration: 7200
+```
+
+### 前端配置 (vite.config.js)
+
+```javascript
+export default defineConfig({
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      }
+    }
+  }
+})
+```
+
+## 设计文档
+
+详细的系统架构设计文档：[.qoder/quests/system-architecture-restructuring.md](.qoder/quests/system-architecture-restructuring.md)
+
+包含：
+- 完整的系统架构设计
+- 数据库表结构设计
+- API 接口设计
+- 前后端交互流程
+- 部署架构
+- 安全设计
+- 性能优化
+
+## 开发进度
+
+- [x] 数据库初始化脚本
+- [x] Spring Boot 后端框架
+- [x] 租户上下文和拦截器
+- [x] Vue3 前端框架
+- [x] 登录页面
+- [x] Docker 部署配置
+- [ ] JWT 认证实现
+- [ ] 完整的后端 API
+- [ ] 完整的前端页面
+- [ ] 单元测试
+- [ ] 集成测试
+
+## 注意事项
+
+1. **生产环境部署前务必修改默认密码和密钥**
+2. 建议使用 HTTPS 加密传输
+3. 定期备份 PostgreSQL 数据库
+4. 配置合适的资源限制（CPU、内存）
+5. 监控系统性能和日志
+
+## 许可证
+
+MIT License
+
+## 联系方式
+
+如有问题，请提交 Issue。
