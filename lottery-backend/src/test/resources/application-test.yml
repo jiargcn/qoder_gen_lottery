@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: lottery-backend-test
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;INIT=CREATE SCHEMA IF NOT EXISTS public
+    username: sa
+    password: 
+  h2:
+    console:
+      enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 1
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:test-data.sql
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.lottery.entity.po
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 设置默认schema为public，避免执行SQL时使用租户schema
+      table-prefix: ""
+
+server:
+  port: 0
+
+logging:
+  level:
+    root: WARN
+    com.lottery: INFO
+    org.springframework.test: INFO
+
+lottery:
+  jwt:
+    secret: test-secret-key-for-unit-testing-jwt-hmac-sha256-algorithm-minimum-256bits
+    expiration: 3600
+  tenant:
+    schema-prefix: tenant_
+    default-schema: public

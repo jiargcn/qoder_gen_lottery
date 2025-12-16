@@ -1,7 +1,10 @@
 package com.lottery.service;
 
 import com.lottery.entity.dto.RegisterDTO;
+import com.lottery.entity.po.Tenant;
 import com.lottery.entity.vo.TenantVO;
+
+import java.util.List;
 
 /**
  * 租户管理服务接口
@@ -39,4 +42,29 @@ public interface ITenantService {
      * @return 租户信息
      */
     TenantVO getTenantByCode(String tenantCode);
+    
+    // ==================== 租户管理 ====================
+    
+    /**
+     * 获取所有租户列表
+     * 
+     * @return 租户列表
+     */
+    List<Tenant> getAllTenants();
+    
+    /**
+     * 创建租户
+     * 
+     * @param tenant 租户信息
+     * @return 创建的租户
+     */
+    Tenant createTenant(Tenant tenant);
+    
+    /**
+     * 更新租户
+     * 
+     * @param tenant 租户信息
+     * @return 更新后的租户
+     */
+    Tenant updateTenant(Tenant tenant);
 }

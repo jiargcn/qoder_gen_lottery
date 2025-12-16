@@ -3,6 +3,7 @@ package com.lottery.controller;
 import com.lottery.common.response.Result;
 import com.lottery.entity.dto.WinnerSaveDTO;
 import com.lottery.entity.po.LotteryActivity;
+import com.lottery.entity.po.Participant;
 import com.lottery.entity.po.Prize;
 import com.lottery.entity.vo.LotteryDataVO;
 import com.lottery.entity.vo.WinnerVO;
@@ -68,6 +69,16 @@ public class LotteryController {
     // @PreAuthorize("hasRole('ADMIN')")  // 开发环境暂时禁用
     public Result<Void> resetLottery(@PathVariable String activityId) {
         lotteryService.resetLottery(activityId);
+        return Result.success();
+    }
+    
+    /**
+     * 撤销已结束活动（删除中奖记录，允许再次抽奖）
+     */
+    @Operation(summary = "撤销已结束活动", description = "将已结束的活动恢复为进行中状态，删除所有中奖记录")
+    @PostMapping("/activities/{activityId}/revoke")
+    public Result<Void> revokeActivity(@PathVariable String activityId) {
+        lotteryService.revokeActivity(activityId);
         return Result.success();
     }
     
@@ -156,6 +167,50 @@ public class LotteryController {
     @DeleteMapping("/prizes/{prizeId}")
     public Result<Void> deletePrize(@PathVariable String prizeId) {
         lotteryService.deletePrize(prizeId);
+        return Result.success();
+    }
+    
+    // ==================== 参会人员管理 ====================
+    
+    /**
+     * 获取活动的参会人员列表
+     */
+    @Operation(summary = "获取参会人员列表", description = "获取指定活动的所有参会人员")
+    @GetMapping("/activities/{activityId}/participants")
+    public Result<List<Participant>> getParticipants(@PathVariable String activityId) {
+        List<Participant> participants = lotteryService.getParticipants(activityId);
+        return Result.success(participants);
+    }
+    
+    /**
+     * 添加参会人员
+     */
+    @Operation(summary = "添加参会人员", description = "为活动添加参会人员")
+    @PostMapping("/participants")
+    public Result<Participant> createParticipant(@RequestBody Participant participant) {
+        Participant created = lotteryService.createParticipant(participant);
+        return Result.success(created);
+    }
+    
+    /**
+     * 更新参会人员
+     */
+    @Operation(summary = "更新参会人员", description = "更新参会人员信息")
+    @PutMapping("/participants/{participantId}")
+    public Result<Participant> updateParticipant(@PathVariable String participantId, 
+                                                  @RequestBody Participant participant) {
+        participant.setParticipantId(participantId);
+        Participant updated = lotteryService.updateParticipant(participant);
+        return Result.success(updated);
+    }
+    
+    /**
+     * 删除参会人员
+     */
+    @Operation(summary = "删除参会人员", description = "删除指定参会人员（不能删除已中奖的人员）")
+    @DeleteMapping("/participants/{participantId}")
+    public Result<Void> deleteParticipant(@PathVariable String participantId) {
+        lotteryService.deleteParticipant(participantId);
         return Result.success();
     }
 }

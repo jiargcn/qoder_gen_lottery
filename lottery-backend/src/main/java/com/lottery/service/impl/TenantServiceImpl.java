@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 租户管理服务实现
@@ -196,5 +197,50 @@ public class TenantServiceImpl implements ITenantService {
         }
         
         return BeanUtil.copyProperties(tenant, TenantVO.class);
+    }
+    
+    // ==================== 租户管理 ====================
+    
+    @Override
+    public List<Tenant> getAllTenants() {
+        return tenantMapper.selectList(null);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Tenant createTenant(Tenant tenant) {
+        // 生成租户ID和SchemaName
+        String tenantId = IdUtil.fastSimpleUUID();
+        String schemaName = "tenant_" + tenant.getTenantName().toLowerCase().replaceAll("\\s+", "_");
+        
+        tenant.setTenantId(tenantId);
+        tenant.setSchemaName(schemaName);
+        tenant.setTenantCode(tenant.getTenantName()); // 默认使用名称作为代码
+        tenant.setStatus("ACTIVE");
+        tenant.setCreatedAt(LocalDateTime.now());
+        tenant.setUpdatedAt(LocalDateTime.now());
+        
+        tenantMapper.insert(tenant);
+        
+        // 创建租户Schema
+        createTenantSchema(tenantId, schemaName);
+        
+        log.info("创建租户成功: tenantId={}, tenantName={}", tenantId, tenant.getTenantName());
+        return tenant;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Tenant updateTenant(Tenant tenant) {
+        Tenant existing = tenantMapper.selectById(tenant.getTenantId());
+        if (existing == null) {
+            throw new BizException("租户不存在");
+        }
+        
+        tenant.setUpdatedAt(LocalDateTime.now());
+        tenantMapper.updateById(tenant);
+        
+        log.info("更新租户成功: tenantId={}", tenant.getTenantId());
+        return tenant;
     }
 }

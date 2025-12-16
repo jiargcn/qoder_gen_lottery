@@ -155,6 +155,7 @@ public class AuthServiceImpl implements IAuthService {
             result.put("userInfo", userVO);
             
             if (tenant != null) {
+                result.put("tenantId", tenant.getTenantId());
                 result.put("tenantCode", tenant.getTenantCode());
                 result.put("tenantName", tenant.getTenantName());
             }
@@ -193,5 +194,36 @@ public class AuthServiceImpl implements IAuthService {
         }
         
         return jwtUtil.refreshToken(oldToken);
+    }
+    
+    @Override
+    public void changePassword(String userId, String oldPassword, String newPassword) {
+        log.info("开始修改密码: userId={}", userId);
+        
+        // 1. 查询用户信息
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        
+        // 2. 验证原密码
+        if (!bcryptUtil.matches(oldPassword, user.getPasswordHash())) {
+            throw new BizException("原密码错误");
+        }
+        
+        // 3. 验证新密码
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BizException("密码长度不能少于6位");
+        }
+        
+        // 4. 加密新密码
+        String newPasswordHash = bcryptUtil.encode(newPassword);
+        
+        // 5. 更新密码
+        user.setPasswordHash(newPasswordHash);
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+        
+        log.info("密码修改成功: userId={}", userId);
     }
 }

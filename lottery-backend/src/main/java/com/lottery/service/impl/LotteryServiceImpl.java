@@ -2,6 +2,7 @@ package com.lottery.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.lottery.common.context.TenantContext;
 import com.lottery.common.exception.BizException;
 import com.lottery.entity.dto.WinnerSaveDTO;
 import com.lottery.entity.po.*;
@@ -54,11 +55,8 @@ public class LotteryServiceImpl implements ILotteryService {
             }
         }
         
-        // 1. 查询活动信息
-        LotteryActivity activity = activityMapper.selectById(activityId);
-        if (activity == null) {
-            throw new BizException("活动不存在");
-        }
+        // 1. 查询活动信息并校验租户
+        LotteryActivity activity = getAndCheckActivity(activityId);
         
         // 2. 查询奖项列表
         LambdaQueryWrapper<Prize> prizeWrapper = new LambdaQueryWrapper<>();
@@ -135,19 +133,29 @@ public class LotteryServiceImpl implements ILotteryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public WinnerVO saveWinner(WinnerSaveDTO winnerSaveDTO) {
+        // 校验活动与租户
+        LotteryActivity activity = getAndCheckActivity(winnerSaveDTO.getActivityId());
+        ensureActivityNotCompleted(activity);
+
         // 1. 查询参与人员和奖项信息
         Participant participant = participantMapper.selectById(winnerSaveDTO.getParticipantId());
         if (participant == null) {
             throw new BizException("参与人员不存在");
         }
-        
-        if (participant.getIsWinner()) {
-            throw new BizException("该人员已中奖，不能重复中奖");
-        }
-        
+
         Prize prize = prizeMapper.selectById(winnerSaveDTO.getPrizeId());
         if (prize == null) {
             throw new BizException("奖项不存在");
+        }
+
+        // 防止跨活动数据串用
+        if (!winnerSaveDTO.getActivityId().equals(prize.getActivityId())
+                || !winnerSaveDTO.getActivityId().equals(participant.getActivityId())) {
+            throw new BizException("参数不合法：奖项或参与人员不属于当前活动");
+        }
+
+        if (participant.getIsWinner()) {
+            throw new BizException("该人员已中奖，不能重复中奖");
         }
         
         if (prize.getDrawnCount() >= prize.getTotalQuota()) {
@@ -156,6 +164,7 @@ public class LotteryServiceImpl implements ILotteryService {
         
         // 2. 插入中奖记录
         WinnerRecord record = new WinnerRecord();
+        record.setRecordId(UUID.randomUUID().toString());  // 生成中奖记录ID
         record.setActivityId(winnerSaveDTO.getActivityId());
         record.setPrizeId(winnerSaveDTO.getPrizeId());
         record.setParticipantId(winnerSaveDTO.getParticipantId());
@@ -184,8 +193,7 @@ public class LotteryServiceImpl implements ILotteryService {
         }
         prizeMapper.updateById(prize);
         
-        // 5. 更新活动中奖总人数
-        LotteryActivity activity = activityMapper.selectById(winnerSaveDTO.getActivityId());
+        // 5. 更新活动中奖总人数（activity 已经查过）
         activity.setTotalWinners(activity.getTotalWinners() + 1);
         activity.setUpdatedAt(LocalDateTime.now());
         activityMapper.updateById(activity);
@@ -206,18 +214,47 @@ public class LotteryServiceImpl implements ILotteryService {
     
     @Override
     public List<WinnerVO> getWinners(String activityId) {
+        // 校验活动与租户
+        LotteryActivity activity = getAndCheckActivity(activityId);
+
         LambdaQueryWrapper<WinnerRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(WinnerRecord::getActivityId, activityId)
                .orderByAsc(WinnerRecord::getDrawTime);
         List<WinnerRecord> records = winnerRecordMapper.selectList(wrapper);
         
-        // 查询活动名称
-        LotteryActivity activity = activityMapper.selectById(activityId);
-        String activityName = activity != null ? activity.getActivityName() : "";
+        String activityName = activity.getActivityName();
+        
+        // 查询所有奖项，构建奖项ID到奖项信息的映射
+        LambdaQueryWrapper<Prize> prizeWrapper = new LambdaQueryWrapper<>();
+        prizeWrapper.eq(Prize::getActivityId, activityId);
+        List<Prize> prizes = prizeMapper.selectList(prizeWrapper);
+        Map<String, Prize> prizeMap = prizes.stream()
+            .collect(Collectors.toMap(Prize::getPrizeId, p -> p));
+        
+        // 查询所有参与人员，构建参与人员ID到人员信息的映射
+        LambdaQueryWrapper<Participant> participantWrapper = new LambdaQueryWrapper<>();
+        participantWrapper.eq(Participant::getActivityId, activityId);
+        List<Participant> participants = participantMapper.selectList(participantWrapper);
+        Map<String, Participant> participantMap = participants.stream()
+            .collect(Collectors.toMap(Participant::getParticipantId, p -> p));
         
         return records.stream().map(record -> {
             WinnerVO vo = BeanUtil.copyProperties(record, WinnerVO.class);
             vo.setActivityName(activityName);
+            
+            // 填充奖项信息
+            Prize prize = prizeMap.get(record.getPrizeId());
+            if (prize != null) {
+                vo.setTotalQuota(prize.getTotalQuota());
+            }
+            
+            // 填充参与人员信息
+            Participant participant = participantMap.get(record.getParticipantId());
+            if (participant != null) {
+                vo.setEmployeeNo(participant.getEmployeeNo());
+                vo.setDepartment(participant.getDepartment());
+            }
+            
             return vo;
         }).collect(Collectors.toList());
     }
@@ -226,6 +263,9 @@ public class LotteryServiceImpl implements ILotteryService {
     @Transactional(rollbackFor = Exception.class)
     public void resetLottery(String activityId) {
         log.info("开始重置抽奖: activityId={}", activityId);
+
+        LotteryActivity activity = getAndCheckActivity(activityId);
+        ensureActivityNotCompleted(activity);
         
         // 1. 删除中奖记录
         LambdaQueryWrapper<WinnerRecord> winnerWrapper = new LambdaQueryWrapper<>();
@@ -254,12 +294,9 @@ public class LotteryServiceImpl implements ILotteryService {
         }
         
         // 4. 重置活动中奖总人数
-        LotteryActivity activity = activityMapper.selectById(activityId);
-        if (activity != null) {
-            activity.setTotalWinners(0);
-            activity.setUpdatedAt(LocalDateTime.now());
-            activityMapper.updateById(activity);
-        }
+        activity.setTotalWinners(0);
+        activity.setUpdatedAt(LocalDateTime.now());
+        activityMapper.updateById(activity);
         
         // 5. 清除缓存
         if (redisTemplate != null) {
@@ -269,12 +306,75 @@ public class LotteryServiceImpl implements ILotteryService {
         log.info("抽奖重置成功: activityId={}", activityId);
     }
     
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void revokeActivity(String activityId) {
+        log.info("开始撤销已结束活动: activityId={}", activityId);
+
+        LotteryActivity activity = getAndCheckActivity(activityId);
+        
+        // 检查活动是否已结束
+        if (!"COMPLETED".equals(activity.getStatus())) {
+            throw new BizException("只有已结束的活动才能撤销");
+        }
+        
+        // 1. 删除中奖记录
+        LambdaQueryWrapper<WinnerRecord> winnerWrapper = new LambdaQueryWrapper<>();
+        winnerWrapper.eq(WinnerRecord::getActivityId, activityId);
+        int deletedWinners = winnerRecordMapper.delete(winnerWrapper);
+        
+        // 2. 重置参与人员中奖状态
+        LambdaQueryWrapper<Participant> participantWrapper = new LambdaQueryWrapper<>();
+        participantWrapper.eq(Participant::getActivityId, activityId);
+        List<Participant> participants = participantMapper.selectList(participantWrapper);
+        for (Participant p : participants) {
+            p.setIsWinner(false);
+            p.setUpdatedAt(LocalDateTime.now());
+            participantMapper.updateById(p);
+        }
+        
+        // 3. 重置奖项已抽取数量
+        LambdaQueryWrapper<Prize> prizeWrapper = new LambdaQueryWrapper<>();
+        prizeWrapper.eq(Prize::getActivityId, activityId);
+        List<Prize> prizes = prizeMapper.selectList(prizeWrapper);
+        for (Prize prize : prizes) {
+            prize.setDrawnCount(0);
+            prize.setStatus("PENDING");
+            prize.setUpdatedAt(LocalDateTime.now());
+            prizeMapper.updateById(prize);
+        }
+        
+        // 4. 将活动状态恢复为 ACTIVE
+        activity.setStatus("ACTIVE");
+        activity.setTotalWinners(0);
+        activity.setUpdatedAt(LocalDateTime.now());
+        activityMapper.updateById(activity);
+        
+        // 5. 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + activityId);
+        }
+        
+        log.info("撤销活动成功: activityId={}, 已删除 {} 条中奖记录", activityId, deletedWinners);
+    }
+    
     // ==================== 活动管理 ====================
     
     @Override
     public List<LotteryActivity> getActivities() {
-        // TODO: 根据当前租户ID查询，这里先查询全部
-        return activityMapper.selectList(null);
+        // 根据当前租户ID查询活动列表
+        String tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new BizException("租户信息不存在，请重新登录");
+        }
+        
+        LambdaQueryWrapper<LotteryActivity> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(LotteryActivity::getTenantId, tenantId)
+               .orderByDesc(LotteryActivity::getCreatedAt);
+        
+        List<LotteryActivity> activities = activityMapper.selectList(wrapper);
+        log.info("查询活动列表: tenantId={}, count={}", tenantId, activities.size());
+        return activities;
     }
     
     @Override
@@ -283,23 +383,46 @@ public class LotteryServiceImpl implements ILotteryService {
         if (activity == null) {
             throw new BizException("活动不存在");
         }
+        
+        // 验证租户权限
+        String tenantId = TenantContext.getTenantId();
+        if (tenantId != null && !tenantId.equals(activity.getTenantId())) {
+            throw new BizException("无权访问该活动");
+        }
+        
         return activity;
     }
     
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LotteryActivity createActivity(LotteryActivity activity) {
+        // 获取当前租户ID
+        String tenantId = TenantContext.getTenantId();
+        if (tenantId == null) {
+            throw new BizException("租户信息不存在，请重新登录");
+        }
+        
+        // 获取当前用户ID
+        String userId = null;
+        org.springframework.security.core.Authentication authentication = 
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() != null) {
+            userId = authentication.getPrincipal().toString();
+        }
+        
         // 生成活动ID
-        activity.setActivityId(UUID.randomUUID().toString().replace("-", ""));
+        activity.setActivityId(UUID.randomUUID().toString());
+        activity.setTenantId(tenantId);
         activity.setStatus("ACTIVE");
         activity.setTotalParticipants(0);
         activity.setTotalWinners(0);
         activity.setCreatedAt(LocalDateTime.now());
         activity.setUpdatedAt(LocalDateTime.now());
-        // TODO: 设置当前租户ID
+        activity.setCreatedBy(userId);  // 设置创建人
+        
         activityMapper.insert(activity);
-        log.info("创建活动成功: activityId={}, activityName={}", 
-                activity.getActivityId(), activity.getActivityName());
+        log.info("创建活动成功: activityId={}, activityName={}, tenantId={}, createdBy={}", 
+                activity.getActivityId(), activity.getActivityName(), tenantId, userId);
         return activity;
     }
     
@@ -310,6 +433,13 @@ public class LotteryServiceImpl implements ILotteryService {
         if (existing == null) {
             throw new BizException("活动不存在");
         }
+        
+        // 验证租户权限
+        String tenantId = TenantContext.getTenantId();
+        if (tenantId != null && !tenantId.equals(existing.getTenantId())) {
+            throw new BizException("无权修改该活动");
+        }
+        
         activity.setUpdatedAt(LocalDateTime.now());
         activityMapper.updateById(activity);
         
@@ -326,6 +456,7 @@ public class LotteryServiceImpl implements ILotteryService {
     
     @Override
     public List<Prize> getPrizes(String activityId) {
+        getAndCheckActivity(activityId);
         LambdaQueryWrapper<Prize> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Prize::getActivityId, activityId)
                .orderByAsc(Prize::getDrawOrder);
@@ -336,7 +467,7 @@ public class LotteryServiceImpl implements ILotteryService {
     @Transactional(rollbackFor = Exception.class)
     public Prize createPrize(Prize prize) {
         // 生成奖项ID
-        prize.setPrizeId(UUID.randomUUID().toString().replace("-", ""));
+        prize.setPrizeId(UUID.randomUUID().toString());
         prize.setDrawnCount(0);
         prize.setStatus("PENDING");
         
@@ -405,5 +536,124 @@ public class LotteryServiceImpl implements ILotteryService {
         }
         
         log.info("删除奖项成功: prizeId={}", prizeId);
+    }
+    
+    // ==================== 参会人员管理 ====================
+    
+    @Override
+    public List<Participant> getParticipants(String activityId) {
+        getAndCheckActivity(activityId);
+        LambdaQueryWrapper<Participant> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Participant::getActivityId, activityId)
+               .orderByAsc(Participant::getCreatedAt);
+        return participantMapper.selectList(wrapper);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Participant createParticipant(Participant participant) {
+        // 校验活动与租户
+        LotteryActivity activity = getAndCheckActivity(participant.getActivityId());
+        ensureActivityNotCompleted(activity);
+
+        // 生成参会人员ID
+        participant.setParticipantId(UUID.randomUUID().toString());
+        participant.setIsWinner(false);
+        participant.setCreatedAt(LocalDateTime.now());
+        participant.setUpdatedAt(LocalDateTime.now());
+        participantMapper.insert(participant);
+        
+        // 更新活动总参与人数
+        LotteryActivity act = activityMapper.selectById(participant.getActivityId());
+        if (act != null) {
+            act.setTotalParticipants(act.getTotalParticipants() + 1);
+            act.setUpdatedAt(LocalDateTime.now());
+            activityMapper.updateById(act);
+        }
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + participant.getActivityId());
+        }
+        
+        log.info("创建参会人员成功: participantId={}, name={}", 
+                participant.getParticipantId(), participant.getName());
+        return participant;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Participant updateParticipant(Participant participant) {
+        Participant existing = participantMapper.selectById(participant.getParticipantId());
+        if (existing == null) {
+            throw new BizException("参会人员不存在");
+        }
+
+        LotteryActivity activity = getAndCheckActivity(existing.getActivityId());
+        ensureActivityNotCompleted(activity);
+
+        participant.setUpdatedAt(LocalDateTime.now());
+        participantMapper.updateById(participant);
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + existing.getActivityId());
+        }
+        
+        log.info("更新参会人员成功: participantId={}", participant.getParticipantId());
+        return participant;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteParticipant(String participantId) {
+        Participant participant = participantMapper.selectById(participantId);
+        if (participant == null) {
+            throw new BizException("参会人员不存在");
+        }
+
+        LotteryActivity activity = getAndCheckActivity(participant.getActivityId());
+        ensureActivityNotCompleted(activity);
+
+        // 检查是否已中奖
+        if (participant.getIsWinner()) {
+            throw new BizException("该人员已中奖，不能删除");
+        }
+        
+        String activityId = participant.getActivityId();
+        participantMapper.deleteById(participantId);
+        
+        // 更新活动总参与人数
+        LotteryActivity act = activityMapper.selectById(activityId);
+        if (act != null && act.getTotalParticipants() > 0) {
+            act.setTotalParticipants(act.getTotalParticipants() - 1);
+            act.setUpdatedAt(LocalDateTime.now());
+            activityMapper.updateById(act);
+        }
+        
+        // 清除缓存
+        if (redisTemplate != null) {
+            redisTemplate.delete("lottery:" + activityId);
+        }
+        
+        log.info("删除参会人员成功: participantId={}", participantId);
+    }
+
+    private LotteryActivity getAndCheckActivity(String activityId) {
+        LotteryActivity activity = activityMapper.selectById(activityId);
+        if (activity == null) {
+            throw new BizException("活动不存在");
+        }
+        String tenantId = TenantContext.getTenantId();
+        if (tenantId != null && !tenantId.equals(activity.getTenantId())) {
+            throw new BizException("无权访问该活动");
+        }
+        return activity;
+    }
+
+    private void ensureActivityNotCompleted(LotteryActivity activity) {
+        if ("COMPLETED".equals(activity.getStatus())) {
+            throw new BizException("该活动已完成，不能再进行抽奖或重置");
+        }
     }
 }

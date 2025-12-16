@@ -1,19 +1,17 @@
 package com.lottery.mybatis;
 
 import com.lottery.common.context.TenantContext;
-import com.lottery.entity.po.Tenant;
-import com.lottery.mapper.TenantMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.plugin.*;
 import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
@@ -21,7 +19,7 @@ import java.sql.SQLException;
  * 核心功能：根据租户上下文动态切换数据库 Schema
  */
 @Slf4j
-// @Component  // 暂时禁用，避免循环依赖
+@Component
 @Intercepts({
     @Signature(
         type = Executor.class,
@@ -36,9 +34,6 @@ import java.sql.SQLException;
 })
 public class SchemaInterceptor implements Interceptor {
     
-    @Autowired(required = false)
-    private TenantMapper tenantMapper;
-    
     private static final String PUBLIC_SCHEMA = "public";
     private static final String SCHEMA_PREFIX = "tenant_";
     
@@ -47,8 +42,9 @@ public class SchemaInterceptor implements Interceptor {
         // 获取当前租户 ID
         String tenantId = TenantContext.getTenantId();
         
-        // 如果没有租户上下文，使用 public schema
-        if (tenantId == null || tenantId.isEmpty()) {
+        // 如果没有租户上下文，或租户ID无效，使用 public schema
+        if (tenantId == null || tenantId.isEmpty() || "undefined".equals(tenantId) || "null".equals(tenantId)) {
+            log.debug("租户上下文为空或无效，使用 public schema: tenantId={}", tenantId);
             return invocation.proceed();
         }
         
@@ -58,7 +54,7 @@ public class SchemaInterceptor implements Interceptor {
         
         try {
             // 查询租户的 schema 名称
-            String schemaName = getSchemaName(tenantId);
+            String schemaName = getSchemaName(tenantId, connection);
             
             if (schemaName != null) {
                 // 设置 search_path
@@ -78,21 +74,25 @@ public class SchemaInterceptor implements Interceptor {
     /**
      * 获取租户的 Schema 名称
      */
-    private String getSchemaName(String tenantId) {
+    private String getSchemaName(String tenantId, Connection connection) {
         try {
-            // 从数据库查询租户信息
-            if (tenantMapper != null) {
-                Tenant tenant = tenantMapper.selectById(tenantId);
-                if (tenant != null) {
-                    return tenant.getSchemaName();
+            // 使用 JDBC 直接查询租户信息，避免循环依赖
+            String sql = "SELECT schema_name FROM public.tenant_registry WHERE tenant_id = ?::uuid";
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, tenantId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("schema_name");
+                    }
                 }
             }
             
             // 如果查询不到，使用默认命名规则
+            log.warn("未找到租户 Schema，使用默认命名: tenantId={}", tenantId);
             return SCHEMA_PREFIX + tenantId.replace("-", "_");
             
         } catch (Exception e) {
-            log.warn("查询租户 Schema 失败，使用默认命名: {}", e.getMessage());
+            log.error("查询租户 Schema 失败: {}", e.getMessage());
             return SCHEMA_PREFIX + tenantId.replace("-", "_");
         }
     }

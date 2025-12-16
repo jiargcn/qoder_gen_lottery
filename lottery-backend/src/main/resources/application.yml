@@ -6,7 +6,7 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/lottery_db?currentSchema=public
+    url: jdbc:postgresql://localhost:5432/lottery_db?currentSchema=public&stringtype=unspecified
     username: lottery_user
     password: lottery_pass
     druid:
@@ -23,6 +23,7 @@ mybatis-plus:
   type-aliases-package: com.lottery.entity.po
   configuration:
     map-underscore-to-camel-case: true
+    jdbc-type-for-null: OTHER
 server:
   port: 8080
   servlet:

@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class LotteryActivity {
     @TableId
     private String activityId;
+    private String tenantId;
     private String activityName;
     private String activityType;
     private String description;

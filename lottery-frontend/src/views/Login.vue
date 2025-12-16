@@ -54,11 +54,26 @@ const handleLogin = async () => {
   
   try {
     const res = await request.post('/auth/login', form)
+    // 保存 Token
     localStorage.setItem('token', res.token)
-    localStorage.setItem('tenantId', res.tenantId || res.userInfo?.tenantId)
-    localStorage.setItem('tenantCode', form.tenantCode)
+    
+    // 保存租户信息
+    localStorage.setItem('tenantId', res.tenantId)
+    localStorage.setItem('tenantCode', res.tenantCode || form.tenantCode)
+    localStorage.setItem('tenantName', res.tenantName || '')
+    
+    // 保存用户信息
+    if (res.userInfo) {
+      localStorage.setItem('userId', res.userInfo.userId)
+      localStorage.setItem('username', res.userInfo.username)
+      localStorage.setItem('realName', res.userInfo.realName || '')
+      localStorage.setItem('email', res.userInfo.email || '')
+      localStorage.setItem('phone', res.userInfo.phone || '')
+      localStorage.setItem('role', res.userInfo.role)
+    }
+    
     ElMessage.success('登录成功')
-    router.push('/activities') // 跳转到活动列表
+    router.push('/activities')
   } catch (error) {
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)

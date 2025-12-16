@@ -40,4 +40,13 @@ public interface IAuthService {
      * @return 新 Token
      */
     String refreshToken(String oldToken);
+    
+    /**
+     * 修改密码
+     * 
+     * @param userId 用户 ID
+     * @param oldPassword 原密码
+     * @param newPassword 新密码
+     */
+    void changePassword(String userId, String oldPassword, String newPassword);
 }

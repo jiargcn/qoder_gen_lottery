@@ -2,6 +2,7 @@ package com.lottery.service;
 
 import com.lottery.entity.dto.WinnerSaveDTO;
 import com.lottery.entity.po.LotteryActivity;
+import com.lottery.entity.po.Participant;
 import com.lottery.entity.po.Prize;
 import com.lottery.entity.vo.LotteryDataVO;
 import com.lottery.entity.vo.WinnerVO;
@@ -43,6 +44,13 @@ public interface ILotteryService {
      * @param activityId 活动 ID
      */
     void resetLottery(String activityId);
+    
+    /**
+     * 撤销已结束活动（删除中奖记录，恢复为进行中状态）
+     * 
+     * @param activityId 活动 ID
+     */
+    void revokeActivity(String activityId);
     
     // ==================== 活动管理 ====================
     
@@ -109,4 +117,37 @@ public interface ILotteryService {
      * @param prizeId 奖项 ID
      */
     void deletePrize(String prizeId);
+    
+    // ==================== 参会人员管理 ====================
+    
+    /**
+     * 获取活动的参会人员列表
+     * 
+     * @param activityId 活动 ID
+     * @return 参会人员列表
+     */
+    List<Participant> getParticipants(String activityId);
+    
+    /**
+     * 添加参会人员
+     * 
+     * @param participant 参会人员信息
+     * @return 创建的参会人员
+     */
+    Participant createParticipant(Participant participant);
+    
+    /**
+     * 更新参会人员
+     * 
+     * @param participant 参会人员信息
+     * @return 更新后的参会人员
+     */
+    Participant updateParticipant(Participant participant);
+    
+    /**
+     * 删除参会人员
+     * 
+     * @param participantId 参会人员 ID
+     */
+    void deleteParticipant(String participantId);
 }

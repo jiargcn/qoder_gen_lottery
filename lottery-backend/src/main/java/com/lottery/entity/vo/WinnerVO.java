@@ -72,4 +72,19 @@ public class WinnerVO implements Serializable {
      * 备注
      */
     private String remarks;
+    
+    /**
+     * 奖项总名额
+     */
+    private Integer totalQuota;
+    
+    /**
+     * 工号
+     */
+    private String employeeNo;
+    
+    /**
+     * 部门
+     */
+    private String department;
 }

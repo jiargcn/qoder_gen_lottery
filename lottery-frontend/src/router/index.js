@@ -26,9 +26,24 @@ const routes = [
     component: () => import('@/views/PrizeManage.vue')
   },
   {
+    path: '/activities/:id/participants',
+    name: 'ParticipantManage',
+    component: () => import('@/views/ParticipantManage.vue')
+  },
+  {
+    path: '/activities/:id/winners',
+    name: 'WinnerRecords',
+    component: () => import('@/views/WinnerRecords.vue')
+  },
+  {
     path: '/lottery/:id',
     name: 'LotteryDraw',
     component: () => import('@/views/LotteryDraw.vue')
+  },
+  {
+    path: '/admin/tenants',
+    name: 'TenantManage',
+    component: () => import('@/views/TenantManage.vue')
   }
 ]
 

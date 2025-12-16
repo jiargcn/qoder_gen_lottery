@@ -84,4 +84,20 @@ public class AuthController {
         Map<String, String> result = Map.of("token", newToken);
         return Result.success(result);
     }
+    
+    /**
+     * 修改密码
+     */
+    @Operation(summary = "修改密码", description = "用户修改自己的密码")
+    @PostMapping("/change-password")
+    public Result<Void> changePassword(
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        String oldPassword = request.get("oldPassword");
+        String newPassword = request.get("newPassword");
+        
+        authService.changePassword(userId, oldPassword, newPassword);
+        return Result.success();
+    }
 }

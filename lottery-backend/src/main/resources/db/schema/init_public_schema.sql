@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.tenant_registry (
     tenant_code VARCHAR(50) UNIQUE NOT NULL,
     tenant_name VARCHAR(100) NOT NULL,
     schema_name VARCHAR(63) UNIQUE NOT NULL,
-    admin_user_id UUID NOT NULL,
+    admin_user_id UUID,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     subscription_plan VARCHAR(50),
     max_users INTEGER DEFAULT 10,

@@ -38,6 +38,7 @@ COMMENT ON COLUMN users.status IS '状态：ACTIVE-激活, DISABLED-禁用';
 -- =====================================================
 CREATE TABLE IF NOT EXISTS lottery_activities (
     activity_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id VARCHAR(50) NOT NULL,
     activity_name VARCHAR(100) NOT NULL,
     activity_type VARCHAR(50) DEFAULT '年会',
     description TEXT,
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS lottery_activities (
     created_by UUID NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_activity_tenant ON lottery_activities(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_activity_status ON lottery_activities(status);
 CREATE INDEX IF NOT EXISTS idx_activity_created_by ON lottery_activities(created_by);
 CREATE INDEX IF NOT EXISTS idx_activity_created_at ON lottery_activities(created_at DESC);

@@ -153,6 +153,17 @@ const handleEdit = (row) => {
 // 保存奖项
 const handleSave = async () => {
   try {
+    // 问题3：验证奖项等级是否重复
+    const existingPrize = prizes.value.find(p => 
+      p.prizeLevel === form.value.prizeLevel && 
+      p.prizeId !== form.value.prizeId
+    )
+    
+    if (existingPrize) {
+      ElMessage.error(`奖项等级 ${form.value.prizeLevel} 已存在（${existingPrize.prizeName}），请使用其他等级`)
+      return
+    }
+    
     const data = {
       ...form.value,
       activityId: activityId

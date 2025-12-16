@@ -1,5 +1,13 @@
 <template>
   <div class="lottery-draw">
+    <!-- 公司名称栏 -->
+    <div class="company-bar">
+      <div class="company-name">🏭 {{ companyName }}</div>
+      <div class="user-info">
+        <span>👤 {{ username }}</span>
+      </div>
+    </div>
+    
     <!-- 顶部导航 -->
     <div class="header">
       <h1>🎉 {{ activityName }} 🎉</h1>
@@ -75,8 +83,28 @@
             {{ isRolling ? '🛑 停止抽奖' : '🎯 开始抽奖' }}
           </el-button>
           <br>
-          <el-button class="reset-btn" @click="handleReset">
+          <el-button 
+            class="reset-btn" 
+            @click="handleReset"
+            :disabled="isRolling || isActivityCompleted"
+          >
             🔄 重置抽奖
+          </el-button>
+          <el-button
+            class="undo-btn"
+            type="warning"
+            @click="handleUndoLast"
+            :disabled="isRolling || !canUndo || isActivityCompleted"
+          >
+            ↩ 撤销上一次中奖
+          </el-button>
+          <el-button
+            class="save-btn"
+            type="primary"
+            @click="handleSaveResults"
+            :disabled="!canSaveResults || isRolling || isActivityCompleted"
+          >
+            💾 保存本次抽奖结果
           </el-button>
         </div>
       </div>
@@ -126,12 +154,6 @@ const route = useRoute()
 const router = useRouter()
 const lotteryStore = useLotteryStore()
 
-// 获取活动ID，优先从路由参数，其次从localStorage，最后使用默认值
-const activityId = route.params.id || localStorage.getItem('currentActivityId') || 'demo'
-const activityName = ref('')
-const currentWinner = ref('')
-
-// 使用 storeToRefs 获取响应式状态
 const { 
   prizes, 
   currentPrizeIndex, 
@@ -140,11 +162,56 @@ const {
   winners,
   isRolling,
   currentRollingName,
-  currentPrize
+  currentPrize,
+  currentActivity,
+  winnerStack
 } = storeToRefs(lotteryStore)
 
+const activityId = route.params.id || localStorage.getItem('currentActivityId') || 'demo'
+const activityName = ref('')
+const currentWinner = ref('')
+const companyName = ref(localStorage.getItem('companyName') || '某某公司')
+const username = ref(localStorage.getItem('username') || '用户')
+
+// 记录初始中奖名单，用于区分“本次新增”的中奖
+const initialWinners = ref({})
+
+// 活动是否已完成
+const isActivityCompleted = computed(() => {
+  return currentActivity.value && currentActivity.value.status === 'COMPLETED'
+})
+
+// 是否可以抽奖（活动未完成、有奖项、有剩余人员、当前奖项未满）
 const canDraw = computed(() => {
-  return currentPrize.value && remainingParticipants.value.length > 0
+  if (isActivityCompleted.value) return false
+  if (!currentPrize.value || remainingParticipants.value.length === 0) {
+    return false
+  }
+  
+  const drawnCount = currentPrize.value.drawnCount || 0
+  const totalQuota = currentPrize.value.totalQuota || 0
+  
+  return drawnCount < totalQuota
+})
+
+// 是否可以撤销
+const canUndo = computed(() => {
+  return winnerStack.value.length > 0 && !isActivityCompleted.value
+})
+
+// 是否可以保存结果：有新增中奖记录且活动未完成
+const canSaveResults = computed(() => {
+  if (isActivityCompleted.value) return false
+  // 当前 winners 和 initialWinners 的差集中有数据就可以保存
+  for (const prize of prizes.value) {
+    const prizeName = prize.prizeName
+    const cur = winners.value[prizeName] || []
+    const init = initialWinners.value[prizeName] || []
+    if (cur.length > init.length) {
+      return true
+    }
+  }
+  return false
 })
 
 // 加载抽奖数据
@@ -153,6 +220,8 @@ const loadData = async () => {
     const data = await request.get(`/lottery/activities/${activityId}/data`)
     lotteryStore.loadLotteryData(data)
     activityName.value = data.activity.activityName
+    // 记录初始 winners（复制一份）
+    initialWinners.value = JSON.parse(JSON.stringify(winners.value || {}))
   } catch (error) {
     ElMessage.error('加载抽奖数据失败')
   }
@@ -160,63 +229,140 @@ const loadData = async () => {
 
 // 开始/停止抽奖
 const toggleLottery = async () => {
+  if (isActivityCompleted.value) {
+    ElMessage.warning('该活动已保存并锁定，不能继续抽奖')
+    return
+  }
+
   if (isRolling.value) {
     // 停止抽奖，获取中奖者名字（字符串）
     const winnerName = lotteryStore.stopRolling()
     
-    console.log('=== 调试信息 ===')
-    console.log('1. winnerName 原始值:', winnerName)
-    console.log('2. winnerName 类型:', typeof winnerName)
-    console.log('3. currentRollingName.value:', currentRollingName.value)
-    console.log('4. currentRollingName.value 类型:', typeof currentRollingName.value)
-    
-    // 直接使用返回的名字
     const actualWinnerName = winnerName
     currentWinner.value = actualWinnerName
-    
-    console.log('5. actualWinnerName:', actualWinnerName)
-    console.log('6. allParticipants:', allParticipants.value)
     
     if (!actualWinnerName) {
       ElMessage.error('中奖者姓名为空')
       return
     }
     
-    // 保存中奖记录到后端
     try {
-      // 查找中奖者的完整信息
       const winnerParticipant = allParticipants.value.find(p => p.name === actualWinnerName)
       
       if (!winnerParticipant) {
-        console.error('找不到中奖者:', actualWinnerName)
-        console.error('所有参与者:', allParticipants.value.map(p => p.name))
         ElMessage.error('找不到中奖者信息')
         return
       }
       
-      // 计算当前抽奖序号（当前奖项已中奖数量 + 1）
-      const currentWinners = winners.value[currentPrize.value.prizeName] || []
-      const drawSequence = currentWinners.length + 1
-      
-      await request.post(`/lottery/winners`, {
-        activityId: activityId,
-        prizeId: currentPrize.value.prizeId,
-        participantId: winnerParticipant.participantId,
-        drawTime: new Date().toISOString(),
-        drawSequence: drawSequence
-      })
-      
+      // 仅在前端更新状态，不立即保存到后端
       lotteryStore.saveWinner({ name: actualWinnerName })
       createFireworks()
       
     } catch (error) {
-      console.error('保存中奖记录失败:', error)
-      ElMessage.error(error.response?.data?.message || '保存中奖记录失败')
+      ElMessage.error('处理中奖结果失败')
     }
   } else {
     // 开始抽奖
+    if (!canDraw.value) {
+      if (!currentPrize.value) {
+        ElMessage.warning('所有奖项已抽完！')
+      } else if (currentPrize.value.drawnCount >= currentPrize.value.totalQuota) {
+        ElMessage.warning(`当前奖项「${currentPrize.value.prizeName}」已抽完！`)
+      } else if (remainingParticipants.value.length === 0) {
+        ElMessage.warning('所有人员都已中奖！')
+      }
+      return
+    }
+    
     currentWinner.value = ''
     lotteryStore.startRolling()
+  }
+}
+
+// 撤销最后一个中奖人员
+const handleUndoLast = () => {
+  if (!canUndo.value) {
+    ElMessage.warning('没有可以撤销的中奖记录')
+    return
+  }
+  lotteryStore.undoLastWinner()
+  currentWinner.value = ''
+}
+
+// 保存本次抽奖结果
+const handleSaveResults = async () => {
+  if (!canSaveResults.value) {
+    ElMessage.warning('当前没有可保存的新增中奖记录')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '保存后该活动将锁定，不能再进行抽奖或重置，确认保存？',
+      '提示',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    // 计算新增的中奖人员（相对 initialWinners 的差集）
+    const payloads = []
+
+    for (const prize of prizes.value) {
+      const prizeName = prize.prizeName
+      const cur = winners.value[prizeName] || []
+      const init = initialWinners.value[prizeName] || []
+
+      // 简单按“数量差异+名字不在初始列表中”来识别新增
+      const newNames = cur.filter(name => !init.includes(name))
+      newNames.forEach((name, idx) => {
+        const participant = allParticipants.value.find(p => p.name === name)
+        if (!participant) return
+        payloads.push({
+          activityId,
+          prizeId: prize.prizeId,
+          participantId: participant.participantId,
+          // 序号：在当前奖项中的位置（从1开始）
+          drawSequence: (init.length + idx + 1)
+        })
+      })
+    }
+
+    if (payloads.length === 0) {
+      ElMessage.info('没有新的中奖记录需要保存')
+      return
+    }
+
+    // 逐个调用后端保存
+    for (const p of payloads) {
+      await request.post('/lottery/winners', {
+        ...p,
+        drawTime: new Date().toISOString()
+      })
+    }
+
+    // 更新活动状态为 COMPLETED，锁定活动
+    const activityPayload = {
+      ...currentActivity.value,
+      status: 'COMPLETED'
+    }
+    await request.put(`/lottery/activities/${activityId}`, activityPayload)
+    if (currentActivity.value) {
+      currentActivity.value.status = 'COMPLETED'
+    }
+
+    // 更新 initialWinners，避免重复保存
+    initialWinners.value = JSON.parse(JSON.stringify(winners.value || {}))
+
+    ElMessage.success('保存成功，本次活动已锁定')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || '保存中奖结果失败')
   }
 }
 
@@ -230,7 +376,10 @@ const handleReset = async () => {
     })
     
     await request.post(`/lottery/activities/${activityId}/reset`)
-    lotteryStore.resetLottery()
+    
+    // 重新加载数据，确保状态同步
+    await loadData()
+    
     currentWinner.value = ''
     ElMessage.success('重置成功')
     
@@ -267,12 +416,38 @@ onMounted(() => {
 .lottery-draw {
   min-height: 100vh;
   background: linear-gradient(135deg, #ff0000 0%, #cc0000 50%, #ff6b6b 100%);
-  padding: 20px;
+  padding: 0;
+}
+
+.company-bar {
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  color: white;
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  
+  .company-name {
+    font-size: 20px;
+    font-weight: bold;
+  }
+  
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    
+    span {
+      font-size: 14px;
+    }
+  }
 }
 
 .header {
   text-align: center;
-  margin-bottom: 30px;
+  margin: 20px 20px 30px 20px;
+  padding-top: 10px;
   
   h1 {
     color: #fff;
