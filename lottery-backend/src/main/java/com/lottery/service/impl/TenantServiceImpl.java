@@ -243,4 +243,79 @@ public class TenantServiceImpl implements ITenantService {
         log.info("更新租户成功: tenantId={}", tenant.getTenantId());
         return tenant;
     }
+    
+    @Override
+    public TenantVO getTenantDetail(String tenantId) {
+        // 查询租户基本信息
+        Tenant tenant = tenantMapper.selectById(tenantId);
+        if (tenant == null) {
+            throw new BizException("租户不存在");
+        }
+        
+        // 转换为 VO
+        TenantVO tenantVO = BeanUtil.copyProperties(tenant, TenantVO.class);
+        
+        try {
+            // 查询租户统计信息
+            String schemaName = tenant.getSchemaName();
+            
+            // 查询当前用户数
+            String userCountSql = "SELECT COUNT(*) FROM " + schemaName + ".users";
+            Integer currentUsers = jdbcTemplate.queryForObject(userCountSql, Integer.class);
+            tenantVO.setCurrentUsers(currentUsers);
+            
+            // 查询当前活动数
+            String activityCountSql = "SELECT COUNT(*) FROM " + schemaName + ".lottery_activity";
+            Integer currentActivities = jdbcTemplate.queryForObject(activityCountSql, Integer.class);
+            tenantVO.setCurrentActivities(currentActivities);
+            
+            // 设置已使用存储（暂时设为 0，后续可以根据实际需求计算）
+            tenantVO.setStorageUsedMb(0);
+            
+            // 查询管理员信息
+            if (tenant.getAdminUserId() != null) {
+                String adminInfoSql = "SELECT username, email FROM " + schemaName + ".users WHERE user_id = ?::uuid";
+                jdbcTemplate.query(adminInfoSql, rs -> {
+                    tenantVO.setAdminUsername(rs.getString("username"));
+                    tenantVO.setAdminEmail(rs.getString("email"));
+                }, tenant.getAdminUserId());
+            }
+            
+        } catch (Exception e) {
+            log.error("查询租户统计信息失败: tenantId={}", tenantId, e);
+            // 如果查询统计信息失败，仍然返回基本信息
+            tenantVO.setCurrentUsers(0);
+            tenantVO.setCurrentActivities(0);
+            tenantVO.setStorageUsedMb(0);
+        }
+        
+        return tenantVO;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public TenantVO updateTenantStatus(String tenantId, String status) {
+        // 查询租户是否存在
+        Tenant tenant = tenantMapper.selectById(tenantId);
+        if (tenant == null) {
+            throw new BizException("租户不存在");
+        }
+        
+        // 如果是启用租户，检查订阅是否过期
+        if ("ACTIVE".equals(status)) {
+            if (tenant.getExpiredAt() != null && tenant.getExpiredAt().isBefore(LocalDateTime.now())) {
+                throw new BizException("租户订阅已过期，无法启用");
+            }
+        }
+        
+        // 更新状态
+        tenant.setStatus(status);
+        tenant.setUpdatedAt(LocalDateTime.now());
+        tenantMapper.updateById(tenant);
+        
+        log.info("更新租户状态成功: tenantId={}, status={}", tenantId, status);
+        
+        // 返回更新后的租户信息
+        return BeanUtil.copyProperties(tenant, TenantVO.class);
+    }
 }

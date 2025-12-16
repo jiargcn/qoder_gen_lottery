@@ -58,8 +58,11 @@ function getTenantId() {
   const hostname = window.location.hostname
   const parts = hostname.split('.')
   
-  // 子域名模式
-  if (parts.length > 2) {
+  // 子域名模式（排除IP地址的情况）
+  // IP地址的特征：所有部分都是数字
+  const isIP = parts.every(part => /^\d+$/.test(part))
+  
+  if (parts.length > 2 && !isIP) {
     return parts[0]
   }
   

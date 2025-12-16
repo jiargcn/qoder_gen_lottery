@@ -3,6 +3,7 @@ package com.lottery.controller;
 import com.lottery.common.response.Result;
 import com.lottery.entity.dto.LoginDTO;
 import com.lottery.entity.dto.RegisterDTO;
+import com.lottery.entity.dto.UserProfileUpdateDTO;
 import com.lottery.entity.vo.TenantVO;
 import com.lottery.entity.vo.UserVO;
 import com.lottery.service.IAuthService;
@@ -99,5 +100,23 @@ public class AuthController {
         
         authService.changePassword(userId, oldPassword, newPassword);
         return Result.success();
+    }
+    
+    /**
+     * 修改用户信息
+     */
+    @Operation(summary = "修改用户信息", description = "用户修改个人信息")
+    @PutMapping("/profile")
+    public Result<UserVO> updateProfile(
+            @Valid @RequestBody UserProfileUpdateDTO updateDTO,
+            Authentication authentication) {
+        String userId = (String) authentication.getPrincipal();
+        UserVO userVO = authService.updateUserProfile(
+            userId, 
+            updateDTO.getEmail(), 
+            updateDTO.getPhone(), 
+            updateDTO.getRealName()
+        );
+        return Result.success(userVO);
     }
 }

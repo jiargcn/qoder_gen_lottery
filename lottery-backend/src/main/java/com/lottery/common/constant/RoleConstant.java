@@ -5,6 +5,9 @@ package com.lottery.common.constant;
  */
 public class RoleConstant {
     
+    /** 超级管理员 */
+    public static final String SUPER_ADMIN = "SUPER_ADMIN";
+    
     /** 管理员 */
     public static final String ADMIN = "ADMIN";
     

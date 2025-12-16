@@ -46,9 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String username = jwtUtil.getUsernameFromToken(token);
                 String role = jwtUtil.getRoleFromToken(token);
                 
+                log.debug("解析JWT Token: userId={}, tenantId={}, username={}, role={}, requestURI={}", 
+                         userId, tenantId, username, role, request.getRequestURI());
+                
                 // 设置租户上下文
                 if (tenantId != null) {
                     TenantContext.setTenantId(tenantId);
+                    log.debug("设置租户上下文: tenantId={}", tenantId);
                 }
                 
                 // 创建认证对象
@@ -71,7 +75,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.error("JWT 认证失败: {}", e.getMessage());
         }
         
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            // 请求处理完成后，清理租户上下文，避免线程复用时出现脏数据
+            String clearedTenantId = TenantContext.getTenantId();
+            TenantContext.clear();
+            log.debug("清理租户上下文: tenantId={}, requestURI={}", clearedTenantId, request.getRequestURI());
+        }
     }
     
     /**

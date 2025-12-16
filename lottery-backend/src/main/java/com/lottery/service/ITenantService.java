@@ -67,4 +67,21 @@ public interface ITenantService {
      * @return 更新后的租户
      */
     Tenant updateTenant(Tenant tenant);
+    
+    /**
+     * 获取租户详情（包含统计信息）
+     * 
+     * @param tenantId 租户 ID
+     * @return 租户详细信息
+     */
+    TenantVO getTenantDetail(String tenantId);
+    
+    /**
+     * 更新租户状态
+     * 
+     * @param tenantId 租户 ID
+     * @param status 目标状态
+     * @return 更新后的租户
+     */
+    TenantVO updateTenantStatus(String tenantId, String status);
 }

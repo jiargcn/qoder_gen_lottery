@@ -49,4 +49,15 @@ public interface IAuthService {
      * @param newPassword 新密码
      */
     void changePassword(String userId, String oldPassword, String newPassword);
+    
+    /**
+     * 更新用户信息
+     * 
+     * @param userId 用户 ID
+     * @param email 邮箱
+     * @param phone 手机号
+     * @param realName 真实姓名
+     * @return 更新后的用户信息
+     */
+    UserVO updateUserProfile(String userId, String email, String phone, String realName);
 }

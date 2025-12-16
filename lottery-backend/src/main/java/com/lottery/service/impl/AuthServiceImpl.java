@@ -226,4 +226,66 @@ public class AuthServiceImpl implements IAuthService {
         
         log.info("密码修改成功: userId={}", userId);
     }
+    
+    @Override
+    public UserVO updateUserProfile(String userId, String email, String phone, String realName) {
+        log.info("开始更新用户信息: userId={}", userId);
+        
+        // 1. 查询用户信息
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        
+        // 2. 验证至少有一个字段需要修改
+        if (email == null && phone == null && realName == null) {
+            throw new BizException("至少需要提供一个字段进行修改");
+        }
+        
+        // 3. 检查邮箱唯一性（如果提供了邮箱且与当前不同）
+        if (email != null && !email.equals(user.getEmail())) {
+            LambdaQueryWrapper<User> emailQuery = new LambdaQueryWrapper<>();
+            emailQuery.eq(User::getEmail, email);
+            emailQuery.ne(User::getUserId, userId);
+            Long emailCount = userMapper.selectCount(emailQuery);
+            if (emailCount > 0) {
+                throw new BizException("邮箱已被其他用户使用");
+            }
+        }
+        
+        // 4. 检查手机号唯一性（如果提供了手机号且与当前不同）
+        if (phone != null && !phone.equals(user.getPhone())) {
+            LambdaQueryWrapper<User> phoneQuery = new LambdaQueryWrapper<>();
+            phoneQuery.eq(User::getPhone, phone);
+            phoneQuery.ne(User::getUserId, userId);
+            Long phoneCount = userMapper.selectCount(phoneQuery);
+            if (phoneCount > 0) {
+                throw new BizException("手机号已被其他用户使用");
+            }
+        }
+        
+        // 5. 更新用户信息
+        boolean updated = false;
+        if (email != null) {
+            user.setEmail(email);
+            updated = true;
+        }
+        if (phone != null) {
+            user.setPhone(phone);
+            updated = true;
+        }
+        if (realName != null) {
+            user.setRealName(realName);
+            updated = true;
+        }
+        
+        if (updated) {
+            user.setUpdatedAt(LocalDateTime.now());
+            userMapper.updateById(user);
+            log.info("用户信息更新成功: userId={}", userId);
+        }
+        
+        // 6. 返回更新后的用户信息
+        return BeanUtil.copyProperties(user, UserVO.class);
+    }
 }

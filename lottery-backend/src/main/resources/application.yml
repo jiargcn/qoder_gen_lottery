@@ -26,6 +26,7 @@ mybatis-plus:
     jdbc-type-for-null: OTHER
 server:
   port: 8080
+  address: 0.0.0.0  # 允许外部访问
   servlet:
     context-path: /api
 logging:

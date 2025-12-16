@@ -54,9 +54,44 @@ public class TenantVO implements Serializable {
     private Integer storageQuotaMb;
     
     /**
+     * 当前用户数（统计）
+     */
+    private Integer currentUsers;
+    
+    /**
+     * 当前活动数（统计）
+     */
+    private Integer currentActivities;
+    
+    /**
+     * 已使用存储（统计，单位MB）
+     */
+    private Integer storageUsedMb;
+    
+    /**
+     * Schema 名称
+     */
+    private String schemaName;
+    
+    /**
+     * 管理员用户名
+     */
+    private String adminUsername;
+    
+    /**
+     * 管理员邮箱
+     */
+    private String adminEmail;
+    
+    /**
      * 创建时间
      */
     private LocalDateTime createdAt;
+    
+    /**
+     * 更新时间
+     */
+    private LocalDateTime updatedAt;
     
     /**
      * 过期时间
